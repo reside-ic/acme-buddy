@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -17,9 +18,23 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+func boolEnv(name string, fallback bool) bool {
+	s := os.Getenv(name)
+	if s == "" {
+		return fallback
+	}
+
+	res, err := strconv.ParseBool(s)
+	if err != nil {
+		return fallback
+	}
+
+	return res
+}
+
 var metricsFlag = flag.String("metrics", ":2112", "The host and port on which to expose metrics.")
 var serverFlag = flag.String("server", "", "The URL to the ACME server's directory. If unset, Let's Encrypt is used by default.")
-var stagingFlag = flag.Bool("staging", false, "Use the staging Let's Encrypt environment.")
+var stagingFlag = flag.Bool("staging", boolEnv("ACME_BUDDY_STAGING", false), "Use the staging Let's Encrypt environment.")
 var domainFlag = flag.String("domain", "", "The domain name to use in the certificate.")
 var emailFlag = flag.String("email", "", "The email address used for registration.")
 

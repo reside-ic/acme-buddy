@@ -45,7 +45,8 @@ docker run
 
 During development, the `--staging` flag should be used to target Let's Encrypt
 staging environment. This prevents us from reaching Let's Encrypt's rate limits
-and also avoids issuing read-world certificates.
+and also avoids issuing read-world certificates. Setting `ACME_BUDDY_STAGING=1`
+as an environment variable also has the same effect.
 
 If the `--oneshot` flag is provided, the client will obtain a new certificate
 and exit immediately, instead of waiting to renew it. This can be used during
