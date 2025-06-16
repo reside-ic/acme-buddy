@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"flag"
 	"log"
@@ -29,8 +28,6 @@ var oneshotFlag = flag.Bool("oneshot", false, "Renew the certificate (if needed)
 var daysFlag = flag.Int("days", 30, "The number of days left on a certificate before it is renewed.")
 var providerFlag = flag.String("dns-provider", "", "The DNS provider to use to provision challenges.")
 var dnsDisableCompletePropagationFlag = flag.Bool("dns-disable-cp", false, "Do not wait for propagation of the DNS records before requesting a certificate.")
-
-var tlsSkipVerifyFlag = flag.Bool("tls-skip-verify", false, "Skip TLS verification. This is insecure and should only be used during tests.")
 
 var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored.")
 var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored.")
@@ -76,10 +73,6 @@ func installCertificate(cert *certificate.Resource) error {
 
 func main() {
 	flag.Parse()
-
-	if *tlsSkipVerifyFlag {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
 
 	server := *serverFlag
 	if server == "" {

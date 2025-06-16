@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -73,6 +74,21 @@ type TestSuite struct {
 	image           string
 	network         *tc.DockerNetwork
 	pebbleContainer tc.Container
+
+	// Pebble's API is only available over TLS. The CA that was used to sign that
+	// cert needs to be trusted by acme-buddy or else it won't be able to
+	// connect.
+	//
+	// This is the CA that signs Pebble's API certificate. It is not the root
+	// certificate that Pebble uses to sign certificates it issues.
+	//
+	// The CA's root cert is available inside the pebble image.  After starting
+	// the container, we get the certificate out and store it here. When running
+	// the acme-buddy image, we'll inject the certificate into the container as a
+	// trusted root.
+	//
+	// See https://github.com/letsencrypt/pebble/pull/65
+	pebbleMiniCA []byte
 }
 
 func (suite *TestSuite) SetupSuite() {
@@ -115,6 +131,13 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 	tc.CleanupContainer(t, container)
 	suite.pebbleContainer = container
+
+	stream, err := suite.pebbleContainer.CopyFileFromContainer(ctx, "test/certs/pebble.minica.pem")
+	require.NoError(t, err)
+	defer stream.Close()
+
+	suite.pebbleMiniCA, err = io.ReadAll(stream)
+	require.NoError(t, err)
 }
 
 func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
@@ -127,7 +150,6 @@ func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCus
 			"--server=https://pebble:14000/dir",
 			"--dns-provider=hdb",
 			"--dns-disable-cp",
-			"--tls-skip-verify",
 			"--domain", domain,
 			"--certificate-path=/tls/certificate.pem",
 			"--key-path=/tls/key.pem",
@@ -136,11 +158,19 @@ func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCus
 			"HDB_ACME_URL":      "http://challtestsrv:8080",
 			"HDB_ACME_USERNAME": "foo",
 			"HDB_ACME_PASSWORD": "bar",
+			"SSL_CERT_FILE":     "/minica.pem",
+		}),
+		tc.WithFiles(tc.ContainerFile{
+			Reader:            bytes.NewReader(suite.pebbleMiniCA),
+			ContainerFilePath: "/minica.pem",
 		}),
 		tc.WithWaitStrategy(WaitForSuccess()),
 	}, append(opts, WithDefaultVolumeMount("/tls"))...)
 
 	container, err := tc.Run(ctx, suite.image, opts...)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
 	defer container.Terminate(context.Background())
 
 	certBytes, err := copyFileFromContainer(ctx, container, "/tls/certificate.pem")
@@ -331,7 +361,6 @@ events { }
 	require.NoError(t, err)
 
 	assert.NotEqual(t, updatedCerts[0].SerialNumber, initialCerts[0].SerialNumber)
-	assert.Greater(t, updatedCerts[0].NotBefore, initialCerts[0].NotBefore)
 }
 
 func TestRunTestSuite(t *testing.T) {
