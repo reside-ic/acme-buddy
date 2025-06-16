@@ -10,5 +10,6 @@ RUN go build -o acme-buddy
 RUN go test -v
 
 FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /go/acme-buddy/acme-buddy /usr/bin/acme-buddy
 ENTRYPOINT [ "/usr/bin/acme-buddy" ]
