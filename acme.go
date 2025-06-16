@@ -273,7 +273,7 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate) {
 			log.Printf("certificate issued, next renewal in %v", next.Sub(m.now()))
 
 			metricLatestRenewalSuccess.With(labels).Set(1)
-			metricLatestSuccessfulRenewalTime.With(labels).Set(1)
+			metricLatestSuccessfulRenewalTime.With(labels).Set(float64(m.now().Unix()))
 			metricLatestRenewalTime.With(labels).Set(float64(m.now().Unix()))
 			metricNextRenewalTime.With(labels).Set(float64(next.Unix()))
 
