@@ -145,6 +145,18 @@ It is assumed that the `tls` volume used to store keys and certificates in
 shared with the HTTP service container, allowing the later to read the files
 upon reception of the signal.
 
+## Forceful renewal
+
+If SIGHUP is sent to acme-buddy, the certificate will be renewed immediately,
+and (if configured) the HTTP service will be reloaded. This is not usually
+necessary as acme-buddy will renew the certificate automatically when needed,
+but can be useful to check that everything is working as expected, including
+certificate reloads.
+
+Note that Let's Encrypt has strict rate limits on the number of certificates
+that can be issued per-domain. Asking acme-buddy to renew the certificate
+repeatedly can quickly hit those limits.
+
 # Testing
 
 The package has both unit and integration tests. They can be run as follows:

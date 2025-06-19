@@ -84,6 +84,7 @@ func getPeerCertificates(endpoint string) ([]*x509.Certificate, error) {
 
 type TestSuite struct {
 	suite.Suite
+	provider        *tc.DockerProvider
 	image           string
 	network         *tc.DockerNetwork
 	pebbleContainer tc.Container
@@ -120,6 +121,7 @@ func (suite *TestSuite) SetupSuite() {
 	provider, err := tc.NewDockerProvider()
 	require.NoError(t, err)
 	t.Cleanup(func() { provider.Close() })
+	suite.provider = provider
 
 	if *imageFlag != "" {
 		suite.image = *imageFlag
@@ -162,7 +164,7 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 }
 
-func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
+func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
 	ctx := suite.Context()
 
 	opts = append([]tc.ContainerCustomizer{
@@ -175,8 +177,7 @@ func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCus
 			"--dns-disable-cp",
 			"--domain", domain,
 			"--certificate-path=/tls/certificate.pem",
-			"--key-path=/tls/key.pem",
-			"--oneshot"),
+			"--key-path=/tls/key.pem"),
 		tc.WithEnv(map[string]string{
 			"HDB_ACME_URL":      "http://challtestsrv:8080",
 			"HDB_ACME_USERNAME": "foo",
@@ -187,15 +188,12 @@ func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCus
 			Reader:            bytes.NewReader(suite.pebbleMiniCA),
 			ContainerFilePath: "/minica.pem",
 		}),
-		tc.WithWaitStrategy(WaitForSuccess()),
 	}, append(opts, WithDefaultVolumeMount("/tls"))...)
 
-	container, err := tc.Run(ctx, suite.image, opts...)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
-	defer container.Terminate(context.Background())
+	return tc.Run(ctx, suite.image, opts...)
+}
 
+func readCertificateFromContainer(ctx context.Context, container tc.Container) (tls.Certificate, error) {
 	certBytes, err := copyFileFromContainer(ctx, container, "/tls/certificate.pem")
 	if err != nil {
 		return tls.Certificate{}, err
@@ -207,6 +205,23 @@ func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCus
 	}
 
 	return tls.X509KeyPair(certBytes, keyBytes)
+}
+
+func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
+	ctx := suite.Context()
+
+	opts = append([]tc.ContainerCustomizer{
+		tc.WithWaitStrategy(WaitForSuccess()),
+		tc.WithCmdArgs("--oneshot"),
+	}, opts...)
+
+	container, err := suite.runAcmeBuddy(domain, opts...)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	defer container.Terminate(context.Background())
+
+	return readCertificateFromContainer(ctx, container)
 }
 
 func (suite *TestSuite) GetRootCA(ctx context.Context) (*x509.Certificate, error) {
@@ -384,6 +399,32 @@ events { }
 	require.NoError(t, err)
 
 	assert.NotEqual(t, updatedCerts[0].SerialNumber, initialCerts[0].SerialNumber)
+}
+
+func (suite *TestSuite) TestCanForceRenewalWithSignal() {
+	t := suite.T()
+	ctx := suite.Context()
+
+	container, err := suite.runAcmeBuddy("www.example.com")
+	require.NoError(t, err)
+	tc.CleanupContainer(t, container)
+
+	err = wait.ForLog("certificate issued, next renewal in").WaitUntilReady(ctx, container)
+	require.NoError(t, err)
+
+	initialCert, err := readCertificateFromContainer(ctx, container)
+	require.NoError(t, err)
+
+	err = suite.provider.Client().ContainerKill(ctx, container.ID, "SIGHUP")
+	require.NoError(t, err)
+
+	err = wait.ForLog("certificate issued, next renewal in").WithOccurrence(2).WaitUntilReady(ctx, container)
+	require.NoError(t, err)
+
+	renewedCert, err := readCertificateFromContainer(ctx, container)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, renewedCert.Leaf.SerialNumber, initialCert.Leaf.SerialNumber)
 }
 
 func TestRunTestSuite(t *testing.T) {
