@@ -1,8 +1,6 @@
 module acme-buddy
 
-go 1.23.8
-
-toolchain go1.24.3
+go 1.23.0
 
 require (
 	github.com/cloudflare/backoff v0.0.0-20240920015135-e46b80a3a7d0

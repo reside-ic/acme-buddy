@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"math/big"
 	"testing"
 	"time"
 
@@ -13,13 +15,32 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// Returns a context that is cancelled at the end of the test.
+//
+// In go1.24+ this can be replaced by t.Context()
+func testContext(t *testing.T) context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return ctx
+}
+
 // Create a test self-signed certificate, using the given notAfter time
 func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		panic(err)
 	}
-	template := x509.Certificate{NotAfter: notAfter}
+
+	// This isn't enough entropy and maybe not super compliant but good enough
+	// for tests. In go1.24+ we could just set the serial to nil and let
+	// x509.CreateCertificate generate a proper one.
+	maxSerial := big.NewInt(1 << 32)
+	serial, err := rand.Int(rand.Reader, maxSerial)
+	if err != nil {
+		panic(err)
+	}
+
+	template := x509.Certificate{NotAfter: notAfter, SerialNumber: serial}
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
 	if err != nil {
 		panic(err)
@@ -98,6 +119,7 @@ func newTestCertManager(renewal time.Duration) (*certManager, *callbacks) {
 // When called with a nil existing certificate, the cert manager should
 // immediately try to obtain and install a certificate.
 func TestCertificateIsObtainedImmediately(t *testing.T) {
+	ctx := testContext(t)
 	m, callbacks := newTestCertManager(60 * time.Minute)
 
 	cert, _ := createTestCertificate(callbacks.time.Add(180 * time.Minute))
@@ -107,7 +129,7 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 		callbacks.On("sleep", 120*time.Minute).Return().Once(),
 	)
 
-	go m.loop(t.Context(), nil)
+	go m.loop(ctx, nil)
 
 	callbacks.barrier(func() {
 		callbacks.AssertExpectations(t)
@@ -115,11 +137,13 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 }
 
 func TestSleepsUntilCertificateExpiry(t *testing.T) {
+	ctx := testContext(t)
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("sleep", 120*time.Minute).Return().Once()
 
 	_, cert := createTestCertificate(callbacks.time.Add(180 * time.Minute))
-	go m.loop(t.Context(), cert)
+
+	go m.loop(ctx, cert)
 
 	callbacks.barrier(func() {
 		callbacks.AssertExpectations(t)
@@ -141,11 +165,13 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 // If obtaining a certificate fails, the certificate manager should retry after
 // a short delay. The retry follows an exponential backoff.
 func TestIssuanceIsRetriedOnError(t *testing.T) {
+	ctx := testContext(t)
+
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("obtainCertificate").Return(nil, errors.New("failed"))
 	callbacks.On("sleep", 1*time.Minute)
 
-	go m.loop(t.Context(), nil)
+	go m.loop(ctx, nil)
 
 	callbacks.barrier(func() {
 		callbacks.AssertExpectations(t)

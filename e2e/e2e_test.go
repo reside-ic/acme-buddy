@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"flag"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,6 +33,18 @@ import (
 var imageFlag = flag.String("image", "", "Image name to test")
 
 func createTestCertificate(template x509.Certificate) (*certificate.Resource, *x509.Certificate, error) {
+	// This isn't enough entropy and maybe not super compliant but good enough
+	// for tests. In go1.24+ we could just leave the serial set to nil and let
+	// x509.CreateCertificate generate a proper one.
+	if template.SerialNumber == nil {
+		maxSerial := big.NewInt(1 << 32)
+		serial, err := rand.Int(rand.Reader, maxSerial)
+		if err != nil {
+			return nil, nil, err
+		}
+		template.SerialNumber = serial
+	}
+
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -91,9 +104,18 @@ type TestSuite struct {
 	pebbleMiniCA []byte
 }
 
+// Returns a context that is cancelled at the end of the test.
+//
+// In go1.24+ this can be replaced by t.Context()
+func (suite *TestSuite) Context() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	suite.T().Cleanup(cancel)
+	return ctx
+}
+
 func (suite *TestSuite) SetupSuite() {
 	t := suite.T()
-	ctx := t.Context()
+	ctx := suite.Context()
 
 	provider, err := tc.NewDockerProvider()
 	require.NoError(t, err)
@@ -141,7 +163,8 @@ func (suite *TestSuite) SetupSuite() {
 }
 
 func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
-	ctx := suite.T().Context()
+	ctx := suite.Context()
+
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
 		network.WithNetwork([]string{}, suite.network),
@@ -219,7 +242,7 @@ func (suite *TestSuite) GetRootCA(ctx context.Context) (*x509.Certificate, error
 }
 
 func (suite *TestSuite) TestCanObtainCertificate() {
-	ctx := suite.T().Context()
+	ctx := suite.Context()
 	cert, err := suite.obtainCertificate("www.example.com")
 	suite.Require().NoError(err)
 	suite.Equal(cert.Leaf.DNSNames, []string{"www.example.com"})
@@ -302,7 +325,7 @@ func (suite *TestSuite) TestCertificateRenewal() {
 
 func (suite *TestSuite) TestCanReloadContainer() {
 	t := suite.T()
-	ctx := t.Context()
+	ctx := suite.Context()
 
 	client, err := tc.NewDockerClientWithOpts(ctx)
 	require.NoError(t, err)

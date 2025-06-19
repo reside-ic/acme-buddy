@@ -41,6 +41,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Install Go toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
       - name: Run integration tests
         run: go test -v ./e2e -image ${{ steps.build.outputs.imageid }}
 
