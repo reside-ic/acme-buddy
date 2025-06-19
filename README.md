@@ -23,8 +23,10 @@ docker run \
     --dns-provider "<PROVIDER>"
 ```
 
-Credentials used by the DNS provider are passed as environment variables. In
-the example above, that is done via the use of a `credentials` file.
+The DNS provider credentials needs to be configured by passing environment
+variables to the container. This is best done by storing them in a file and
+using the `--env-file` flag, as shown above. Details about the environment
+variables can be found in the [DNS Providers](#dns-providers) section below.
 
 In practice, the command above is not very useful as it does not store the
 certificate or private key anywhere. The `--certificate-path` and `--key-path`
@@ -45,13 +47,38 @@ docker run
 
 During development, the `--staging` flag should be used to target Let's Encrypt
 staging environment. This prevents us from reaching Let's Encrypt's rate limits
-and also avoids issuing read-world certificates. Setting `ACME_BUDDY_STAGING=1`
-as an environment variable also has the same effect.
+and also avoids issuing read-world certificates.
+
+Setting `ACME_BUDDY_STAGING=1` as an environment variable also has the same
+effect. You must pass `--env ACME_BUDDY_STAGING` to the `docker run` command to
+inherit that variable from the calling environment into the container:
+
+```sh
+docker run
+    --env ACME_BUDDY_STAGING \
+    --env-file credentials \
+    ghcr.io/reside-ic/acme-buddy \
+    <other options...>
+```
 
 If the `--oneshot` flag is provided, the client will obtain a new certificate
 and exit immediately, instead of waiting to renew it. This can be used during
 the initial deployment stage to avoid races between acme-buddy and the web
 server container starting up.
+
+## Local usage
+
+acme-buddy can also be used without Dockey as a standalone binary or straight
+from the local directory, which is useful for local development.
+
+```sh
+# Build and run the standalone executable
+go build
+./acme-buddy --domain "<FQDN>" <other options...>
+
+# or run the package directly
+go run . --domain "<FQDN>" <other options...>
+```
 
 ## DNS Providers
 
