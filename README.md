@@ -153,6 +153,13 @@ necessary as acme-buddy will renew the certificate automatically when needed,
 but can be useful to check that everything is working as expected, including
 certificate reloads.
 
+```sh
+# Start acme-buddy as a named container
+docker run --name acme-buddy ghcr.io/reside-ic/acme-buddy <options...>
+# Force certificate renewal
+docker kill -s SIGHUP acme-buddy
+```
+
 Note that Let's Encrypt has strict rate limits on the number of certificates
 that can be issued per-domain. Asking acme-buddy to renew the certificate
 repeatedly can quickly hit those limits.
