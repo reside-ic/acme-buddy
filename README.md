@@ -66,20 +66,6 @@ and exit immediately, instead of waiting to renew it. This can be used during
 the initial deployment stage to avoid races between acme-buddy and the web
 server container starting up.
 
-## Local usage
-
-acme-buddy can also be used without Dockey as a standalone binary or straight
-from the local directory, which is useful for local development.
-
-```sh
-# Build and run the standalone executable
-go build
-./acme-buddy --domain "<FQDN>" <other options...>
-
-# or run the package directly
-go run . --domain "<FQDN>" <other options...>
-```
-
 ## DNS Providers
 
 Only two DNS providers are currently supported, Cloudflare and HDB. HDB is the
@@ -174,6 +160,20 @@ blueprints for integrating it into new projects.
     scripts that manually pull and spawn Docker containers. No reverse-proxy
     used, TLS termination is done by Vault directly. Certificates are reloaded
     automatically on renewal.
+
+## Local usage
+
+acme-buddy can also be used without Docker as a standalone binary or straight
+from the local directory, which is useful for local development.
+
+```sh
+# Build and run the standalone executable
+go build
+./acme-buddy --domain "<FQDN>" <other options...>
+
+# or run the package directly
+go run . --domain "<FQDN>" <other options...>
+```
 
 ## Testing
 
