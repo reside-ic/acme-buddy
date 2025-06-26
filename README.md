@@ -105,7 +105,7 @@ See the [lego documentation][lego-cloudflare].
 acme-buddy is designed to run alongside a container that acts as an HTTP
 server. The two containers should share a Docker volume, which will be used by
 acme-buddy to write the certificate and private key, and from which the HTTP
-will read them.
+server will read them.
 
 Whenever the certificate is renewed, acme-buddy can send a Unix signal (SIGHUP
 by default) to the HTTP server container, instructing it to reload its
@@ -114,9 +114,9 @@ HTTP interface that needs a certificate and which supports reload on signal can
 benefit from this (eg. Vault).
 
 To allow acme-buddy to send signals to other containers, the Docker Unix socket
-should be bind-mounted into its container. Additionally, the
-`--reload-container` option is used to specify the name or ID of the container
-that needs to be reloaded.
+must be bind-mounted into its container. Additionally, the `--reload-container`
+option is used to specify the name or ID of the container that needs to be
+reloaded.
 
 ```sh
 docker run
@@ -178,7 +178,7 @@ go run . --domain "<FQDN>" <other options...>
 ## Testing
 
 The package has both unit and integration tests. They can be run as follows:
-```
+```sh
 go test       # Unit tests
 go test ./e2e # Integration tests
 ```
