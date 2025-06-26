@@ -148,7 +148,21 @@ It is assumed that the `tls` volume used to store keys and certificates in
 shared with the HTTP service container, allowing the later to read the files
 upon reception of the signal.
 
-# Integation examples
+## Metrics
+
+acme-buddy exposes a couple of metrics about the last renewal attempt,
+information about the current certificate and the time of the next renewal
+attempt. By default these are exposed on port 2112.
+
+When running acme-buddy in a Docker container, you should forward that port
+onto the host using `docker run -p 2112:2112 ...`.
+
+After deploying acme-buddy onto a new host, you should update the
+[Prometheus configuration][montagu-monitor] to add a new scrape target.
+
+[montagu-monitor]: https://github.com/vimc/montagu-monitor
+
+## Integation examples
 
 Here is a list of places we have deployed acme-buddy. These can serve as
 blueprints for integrating it into new projects.
@@ -161,7 +175,7 @@ blueprints for integrating it into new projects.
     used, TLS termination is done by Vault directly. Certificates are reloaded
     automatically on renewal.
 
-# Testing
+## Testing
 
 The package has both unit and integration tests. They can be run as follows:
 ```
@@ -172,7 +186,7 @@ go test ./e2e # Integration tests
 The integration tests use Docker. They start and stop all containers as needed,
 without the need for any external setup.
 
-# Implementation details
+## Implementation details
 
 Let's Encrypt and the ACME protocol allow automatic provisioning of TLS
 certificates. Before being issued a certificate for a domain, we must prove
