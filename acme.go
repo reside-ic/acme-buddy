@@ -272,7 +272,6 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, force
 			case <-forceRenewal:
 				log.Printf("received signal, renewing certificate now")
 			case <-m.after(next.Sub(now)):
-				log.Printf("timeout")
 			}
 		}
 
