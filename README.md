@@ -102,6 +102,9 @@ HDB_ACME_USERNAME=xxx
 HDB_ACME_PASSWORD=yyy
 ```
 
+These credentials can be found at `secret/certbot-hdb/credentials` in the
+mrc-ide Vault.
+
 Additionally the `HDB_ACME_URL` variable is supported. This is needed for
 integration tests only. In practice the default value should be sufficient.
 
@@ -144,6 +147,19 @@ docker run
 It is assumed that the `tls` volume used to store keys and certificates in
 shared with the HTTP service container, allowing the later to read the files
 upon reception of the signal.
+
+# Integation examples
+
+Here is a list of places we have deployed acme-buddy. These can serve as
+blueprints for integrating it into new projects.
+
+- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19): bash
+    scripts that manually pull and spawn Docker containers. Uses nginx as the
+    HTTP reverse proxy, with automatic reload on renewal.
+- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5): bash
+    scripts that manually pull and spawn Docker containers. No reverse-proxy
+    used, TLS termination is done by Vault directly. Certificates are reloaded
+    automatically on renewal.
 
 # Testing
 
