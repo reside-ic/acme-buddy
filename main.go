@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"slices"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -143,6 +145,10 @@ func main() {
 	} else {
 		http.Handle("/metrics", promhttp.Handler())
 		go http.ListenAndServe(*metricsFlag, nil)
-		m.loop(context.Background(), cert)
+
+		renewSignal := make(chan os.Signal)
+		signal.Notify(renewSignal, syscall.SIGHUP)
+
+		m.loop(context.Background(), cert, renewSignal)
 	}
 }
