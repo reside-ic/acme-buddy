@@ -162,7 +162,7 @@ blueprints for integrating it into new projects.
     automatically on renewal.
 - [mint / mint-dev](https://github.com/mrc-ide/mint-deploy/pull/1): `mint-deploy` 
     bash script creates the hdb-credentials file, then `docker-compose.yml` 
-    handles the acme_buddy container, the volume for the certificates and the
+    handles the acme-buddy container, the volume for the certificates and the
     mapping of that into the proxy container.
 
 ## Local usage
