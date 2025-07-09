@@ -153,17 +153,20 @@ After deploying acme-buddy onto a new host, you should update the
 Here is a list of places we have deployed acme-buddy. These can serve as
 blueprints for integrating it into new projects.
 
-- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19): bash
-    scripts that manually pull and spawn Docker containers. Uses nginx as the
-    HTTP reverse proxy, with automatic reload on renewal.
-- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5): bash
-    scripts that manually pull and spawn Docker containers. No reverse-proxy
-    used, TLS termination is done by Vault directly. Certificates are reloaded
-    automatically on renewal.
+- [daedalus / daedalus-dev](https://github.com/jameel-institute/daedalus-deploy/pull/9): 
+    Python-based deploy scripts using our [constellation](https://github.com/reside-ic/constellation/)
+    package to start a constellation of docker containers.
 - [mint / mint-dev](https://github.com/mrc-ide/mint-deploy/pull/1): `mint-deploy` 
     bash script creates the hdb-credentials file, then `docker-compose.yml` 
     handles the acme-buddy container, the volume for the certificates and the
     mapping of that into the proxy container.
+- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5): bash
+    scripts that manually pull and spawn Docker containers. No reverse-proxy
+    used, TLS termination is done by Vault directly. Certificates are reloaded
+    automatically on renewal.
+- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19): bash
+    scripts that manually pull and spawn Docker containers. Uses nginx as the
+    HTTP reverse proxy, with automatic reload on renewal.
 
 ## Local usage
 
