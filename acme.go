@@ -169,9 +169,12 @@ type certManager struct {
 	renewal            time.Duration
 	obtainCertificate  func() (*certificate.Resource, error)
 	installCertificate func(cert *certificate.Resource) error
-	now                func() time.Time
-	sleep              func(time.Duration)
 	noJitter           bool
+
+	// These match the time.Now and time.After functions.
+	// They get mocked during unit tests.
+	now   func() time.Time
+	after func(time.Duration) <-chan time.Time
 }
 
 func (m *certManager) needsRenewal(cert *x509.Certificate) bool {
@@ -238,18 +241,8 @@ func (m *certManager) updateCertificateMetrics(cert *x509.Certificate) {
 	}).Set(1)
 }
 
-func (m *certManager) loop(ctx context.Context, initial *x509.Certificate) {
+func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, forceRenewal <-chan os.Signal) error {
 	labels := prometheus.Labels{"domain": m.domain}
-
-	if initial != nil {
-		m.updateCertificateMetrics(initial)
-	}
-	if initial != nil && !m.needsRenewal(initial) {
-		next := m.nextRenewal(initial)
-		log.Printf("certificate is still valid until %v, next renewal in %v", initial.NotAfter, next.Sub(m.now()))
-		metricNextRenewalTime.With(labels).Set(float64(next.Unix()))
-		m.sleep(next.Sub(m.now()))
-	}
 
 	var b *backoff.Backoff
 	if m.noJitter {
@@ -258,16 +251,40 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate) {
 		b = backoff.New(24*time.Hour, 1*time.Minute)
 	}
 
-	for ctx.Err() == nil {
-		cert, next, err := m.renew()
+	var next time.Time
+	if initial != nil {
+		m.updateCertificateMetrics(initial)
+	}
+	if initial != nil && !m.needsRenewal(initial) {
+		next = m.nextRenewal(initial)
+		log.Printf("certificate is still valid until %v, next renewal in %v", initial.NotAfter, next.Sub(m.now()))
+	}
+
+	for {
+		now := m.now()
+		if next.After(now) {
+			metricNextRenewalTime.With(labels).Set(float64(m.now().Unix()))
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+
+			case <-forceRenewal:
+				log.Printf("received signal, renewing certificate now")
+			case <-m.after(next.Sub(now)):
+			}
+		}
+
+		var err error
+		var cert *x509.Certificate
+		cert, next, err = m.renew()
 		if err != nil {
 			delay := b.Duration()
 			log.Printf("certificate issuance failed, retrying in %v: %v", delay, err)
 
 			metricLatestRenewalSuccess.With(labels).Set(0)
 			metricLatestRenewalTime.With(labels).Set(float64(m.now().Unix()))
-			metricNextRenewalTime.With(labels).Set(float64(m.now().Add(delay).Unix()))
-			m.sleep(delay)
+			next = m.now().Add(delay)
 		} else {
 			b.Reset()
 			log.Printf("certificate issued, next renewal in %v", next.Sub(m.now()))
@@ -275,11 +292,8 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate) {
 			metricLatestRenewalSuccess.With(labels).Set(1)
 			metricLatestSuccessfulRenewalTime.With(labels).Set(float64(m.now().Unix()))
 			metricLatestRenewalTime.With(labels).Set(float64(m.now().Unix()))
-			metricNextRenewalTime.With(labels).Set(float64(next.Unix()))
 
 			m.updateCertificateMetrics(cert)
-
-			m.sleep(next.Sub(m.now()))
 		}
 	}
 }
@@ -290,7 +304,8 @@ func NewCertManager(client *lego.Client, renewal time.Duration, domain string, i
 		renewal:            renewal,
 		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domain) },
 		installCertificate: installCertificate,
-		now:                time.Now,
-		sleep:              time.Sleep,
+
+		now:   time.Now,
+		after: time.After,
 	}
 }

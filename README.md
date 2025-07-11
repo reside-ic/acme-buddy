@@ -148,6 +148,25 @@ After deploying acme-buddy onto a new host, you should update the
 
 [montagu-monitor]: https://github.com/vimc/montagu-monitor
 
+## Forceful renewal
+
+If SIGHUP is sent to acme-buddy, the certificate will be renewed immediately,
+and (if configured) the HTTP service will be reloaded. This is not usually
+necessary as acme-buddy will renew the certificate automatically when needed,
+but can be useful to check that everything is working as expected, including
+certificate reloads.
+
+```sh
+# Start acme-buddy as a named container
+docker run --name acme-buddy ghcr.io/reside-ic/acme-buddy <options...>
+# Force certificate renewal
+docker kill -s SIGHUP acme-buddy
+```
+
+Note that Let's Encrypt has strict rate limits on the number of certificates
+that can be issued per-domain. Asking acme-buddy to renew the certificate
+repeatedly can quickly hit those limits.
+
 ## Integation examples
 
 Here is a list of places we have deployed acme-buddy. These can serve as
