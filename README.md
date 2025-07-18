@@ -172,20 +172,20 @@ repeatedly can quickly hit those limits.
 Here is a list of places we have deployed acme-buddy. These can serve as
 blueprints for integrating it into new projects.
 
-- [daedalus / daedalus-dev](https://github.com/jameel-institute/daedalus-deploy/pull/9): 
+- [daedalus-deploy](https://github.com/jameel-institute/daedalus-deploy/pull/9):
     Python-based deploy scripts using our [constellation](https://github.com/reside-ic/constellation/)
     package to start a constellation of docker containers.
-- [mint / mint-dev](https://github.com/mrc-ide/mint-deploy/pull/1): `mint-deploy` 
-    bash script creates the hdb-credentials file, then `docker-compose.yml` 
-    handles the acme-buddy container, the volume for the certificates and the
-    mapping of that into the proxy container.
-- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5): bash
-    scripts that manually pull and spawn Docker containers. No reverse-proxy
-    used, TLS termination is done by Vault directly. Certificates are reloaded
-    automatically on renewal.
-- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19): bash
-    scripts that manually pull and spawn Docker containers. Uses nginx as the
-    HTTP reverse proxy, with automatic reload on renewal.
+- [mint-deploy](https://github.com/mrc-ide/mint-deploy/pull/1):
+    docker-compose is used to configure and manage the containers, including
+    starting acme-buddy and mapping the certificates volume across to the proxy
+    container. The HDB credentials are fetched from Vault by a bash script.
+- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5):
+    A bash script that manually pulls and starts Docker containers. No
+    reverse-proxy used, TLS termination is done by Vault directly. Certificates
+    are reloaded automatically on renewal.
+- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19):
+    A bash script that manually pulls and starts Docker containers. Uses nginx as
+    the HTTP reverse proxy, with automatic reload on renewal.
 
 ## Local usage
 
