@@ -66,20 +66,6 @@ and exit immediately, instead of waiting to renew it. This can be used during
 the initial deployment stage to avoid races between acme-buddy and the web
 server container starting up.
 
-## Local usage
-
-acme-buddy can also be used without Dockey as a standalone binary or straight
-from the local directory, which is useful for local development.
-
-```sh
-# Build and run the standalone executable
-go build
-./acme-buddy --domain "<FQDN>" <other options...>
-
-# or run the package directly
-go run . --domain "<FQDN>" <other options...>
-```
-
 ## DNS Providers
 
 Only two DNS providers are currently supported, Cloudflare and HDB. HDB is the
@@ -102,6 +88,9 @@ HDB_ACME_USERNAME=xxx
 HDB_ACME_PASSWORD=yyy
 ```
 
+These credentials can be found at `secret/certbot-hdb/credentials` in the
+mrc-ide Vault.
+
 Additionally the `HDB_ACME_URL` variable is supported. This is needed for
 integration tests only. In practice the default value should be sufficient.
 
@@ -116,7 +105,7 @@ See the [lego documentation][lego-cloudflare].
 acme-buddy is designed to run alongside a container that acts as an HTTP
 server. The two containers should share a Docker volume, which will be used by
 acme-buddy to write the certificate and private key, and from which the HTTP
-will read them.
+server will read them.
 
 Whenever the certificate is renewed, acme-buddy can send a Unix signal (SIGHUP
 by default) to the HTTP server container, instructing it to reload its
@@ -125,9 +114,9 @@ HTTP interface that needs a certificate and which supports reload on signal can
 benefit from this (eg. Vault).
 
 To allow acme-buddy to send signals to other containers, the Docker Unix socket
-should be bind-mounted into its container. Additionally, the
-`--reload-container` option is used to specify the name or ID of the container
-that needs to be reloaded.
+must be bind-mounted into its container. Additionally, the `--reload-container`
+option is used to specify the name or ID of the container that needs to be
+reloaded.
 
 ```sh
 docker run
@@ -144,6 +133,20 @@ docker run
 It is assumed that the `tls` volume used to store keys and certificates in
 shared with the HTTP service container, allowing the later to read the files
 upon reception of the signal.
+
+## Metrics
+
+acme-buddy exposes a couple of metrics about the last renewal attempt,
+information about the current certificate and the time of the next renewal
+attempt. By default these are exposed on port 2112.
+
+When running acme-buddy in a Docker container, you should forward that port
+onto the host using `docker run -p 2112:2112 ...`.
+
+After deploying acme-buddy onto a new host, you should update the
+[Prometheus configuration][montagu-monitor] to add a new scrape target.
+
+[montagu-monitor]: https://github.com/vimc/montagu-monitor
 
 ## Forceful renewal
 
@@ -164,10 +167,44 @@ Note that Let's Encrypt has strict rate limits on the number of certificates
 that can be issued per-domain. Asking acme-buddy to renew the certificate
 repeatedly can quickly hit those limits.
 
-# Testing
+## Integation examples
+
+Here is a list of places we have deployed acme-buddy. These can serve as
+blueprints for integrating it into new projects.
+
+- [daedalus-deploy](https://github.com/jameel-institute/daedalus-deploy/pull/9):
+    Python-based deploy scripts using our [constellation](https://github.com/reside-ic/constellation/)
+    package to start a constellation of docker containers.
+- [mint-deploy](https://github.com/mrc-ide/mint-deploy/pull/1):
+    docker-compose is used to configure and manage the containers, including
+    starting acme-buddy and mapping the certificates volume across to the proxy
+    container. The HDB credentials are fetched from Vault by a bash script.
+- [mrc-ide-vault](https://github.com/mrc-ide/mrc-ide-vault/pull/5):
+    A bash script that manually pulls and starts Docker containers. No
+    reverse-proxy used, TLS termination is done by Vault directly. Certificates
+    are reloaded automatically on renewal.
+- [wodin-epimodels](https://github.com/mrc-ide/wodin-epimodels/pull/19):
+    A bash script that manually pulls and starts Docker containers. Uses nginx as
+    the HTTP reverse proxy, with automatic reload on renewal.
+
+## Local usage
+
+acme-buddy can also be used without Docker as a standalone binary or straight
+from the local directory, which is useful for local development.
+
+```sh
+# Build and run the standalone executable
+go build
+./acme-buddy --domain "<FQDN>" <other options...>
+
+# or run the package directly
+go run . --domain "<FQDN>" <other options...>
+```
+
+## Testing
 
 The package has both unit and integration tests. They can be run as follows:
-```
+```sh
 go test       # Unit tests
 go test ./e2e # Integration tests
 ```
@@ -175,7 +212,7 @@ go test ./e2e # Integration tests
 The integration tests use Docker. They start and stop all containers as needed,
 without the need for any external setup.
 
-# Implementation details
+## Implementation details
 
 Let's Encrypt and the ACME protocol allow automatic provisioning of TLS
 certificates. Before being issued a certificate for a domain, we must prove
