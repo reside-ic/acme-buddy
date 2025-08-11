@@ -181,5 +181,6 @@ func main() {
 		for i, m := range managers {
 			go m.loop(context.Background(), certs[i], renewSignal)
 		}
+		select {}
 	}
 }
