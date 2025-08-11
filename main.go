@@ -134,7 +134,7 @@ func main() {
 		log.Fatal("Inconsistent numbers of domains, certs, or keys specified.")
 	}	
 
-	var managers []*CertManager
+	var managers []*NewCertManager
 	var certs []*x509.Certificate
 
 	for i := 0; i < len(splitDomains); i++ {
@@ -179,8 +179,7 @@ func main() {
 		}
 	} else {
 		for i, m := range managers {
-			cert := certs[i]
-			go m.loop(context.Background(), cert, renewSignal)
+			go m.loop(context.Background(), certs[i], renewSignal)
 		}
 	}
 }
