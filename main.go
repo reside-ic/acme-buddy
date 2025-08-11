@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,7 +38,7 @@ func boolEnv(name string, fallback bool) bool {
 var metricsFlag = flag.String("metrics", ":2112", "The host and port on which to expose metrics.")
 var serverFlag = flag.String("server", "", "The URL to the ACME server's directory. If unset, Let's Encrypt is used by default.")
 var stagingFlag = flag.Bool("staging", boolEnv("ACME_BUDDY_STAGING", false), "Use the staging Let's Encrypt environment.")
-var domainFlag = flag.String("domain", "", "The domain name to use in the certificate.")
+var domainFlag = flag.String("domain", "", "The domain name to use in the certificate. For multiple domains for this server, can be comma-separated.")
 var emailFlag = flag.String("email", "", "The email address used for registration.")
 
 var forceFlag = flag.Bool("force", false, "Renew the certificate even if the existing one is still valid.")
@@ -46,8 +47,8 @@ var daysFlag = flag.Int("days", 30, "The number of days left on a certificate be
 var providerFlag = flag.String("dns-provider", "", "The DNS provider to use to provision challenges.")
 var dnsDisableCompletePropagationFlag = flag.Bool("dns-disable-cp", false, "Do not wait for propagation of the DNS records before requesting a certificate.")
 
-var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored.")
-var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored.")
+var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored. One per domain, comma-separated.")
+var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored. One per domain, comma-separated.")
 var accountPathFlag = flag.String("account-path", "", "Path where the account information is stored.")
 
 var reloadContainerFlag = flag.String("reload-container", "", "Name of container to reload after a new certificate is issued.")
@@ -118,37 +119,68 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not create client: %v", err)
 	}
+	
+	/* Parse multiple domain names, certificates and keys,
+	   then feed things one by one into the original global vars
+	   which are used in NewCertManager. Overwriting the globals
+	   is a bit gross, but is it the cleanest way here?
+	*/
+	
+	splitDomains := strings.Split(*domainFlag, ",")
+	splitCertPaths:= strings.Split(*certificatePathFlag, ",")
+	splitKeyPaths := strings.Split(*keyPathFlag, ",")
+	
+	if len(splitDomains) != len(splitCertPaths) ||  len(splitDomains) != len(splitKeyPaths) {
+		log.Fatal("Inconsistent numbers of domains, certs, or keys specified.")
+	}	
 
-	var cert *x509.Certificate
-	if *certificatePathFlag != "" && !*forceFlag {
-		certs, err := LoadCertificate(*certificatePathFlag)
-		if err != nil {
-			log.Printf("could not read certificate, will request a new one: %v", err)
-		} else if !slices.Equal(certs[0].DNSNames, []string{*domainFlag}) {
-			log.Printf("DNS names in existing certificate do not match, will request a new certificate")
-		} else {
-			cert = certs[0]
-		}
-	}
+	var managers []*CertManager
+	var certs []*x509.Certificate
 
-	m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, *domainFlag, installCertificate)
-	if *oneshotFlag {
-		if cert == nil || m.needsRenewal(cert) {
-			cert, _, err := m.renew()
+	for i := 0; i < len(splitDomains); i++) {
+		*domainFlag = strings.TrimSpace(splitDomains[i])
+		*certificatePathFlag = strings.TrimSpace(splitCertPaths[i])
+		*keyPathFlag = strings.TrimSpace(splitKeyPaths[i])
+		
+		var cert *x509.Certificate
+		if *certificatePathFlag != "" && !*forceFlag {
+			certLoaded, err := LoadCertificate(*certificatePathFlag)
 			if err != nil {
-				log.Fatal(err)
+				log.Printf("could not read certificate, will request a new one: %v", err)
+			} else if !slices.Equal(certLoaded[0].DNSNames, []string{*domainFlag}) {
+				log.Printf("DNS names in existing certificate do not match, will request a new certificate")
+			} else {
+				cert = certLoaded[0]
 			}
-			log.Printf("issued certificate is valid until %v", cert.NotAfter)
-		} else {
-			log.Printf("certificate is still valid until %v", cert.NotAfter)
+		}
+
+		m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, *domainFlag, installCertificate)
+		managers = append(managers, m)
+		certs = append(certs, cert)
+	}
+	
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(*metricsFlag, nil)
+	renewSignal := make(chan os.Signal)
+	signal.Notify(renewSignal, syscall.SIGHUP)
+
+	if *oneshotFlag {
+		for i, m := range managers {
+			cert := certs[i]
+			if cert == nil || m.needsRenewal(cert) {
+				cert, _, err := m.renew()
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Printf("issued certificate is valid until %v", cert.NotAfter)
+			} else {
+				log.Printf("certificate is still valid until %v", cert.NotAfter)
+			}
 		}
 	} else {
-		http.Handle("/metrics", promhttp.Handler())
-		go http.ListenAndServe(*metricsFlag, nil)
-
-		renewSignal := make(chan os.Signal)
-		signal.Notify(renewSignal, syscall.SIGHUP)
-
-		m.loop(context.Background(), cert, renewSignal)
+		for i, m := range managers {
+			cert := certs[i]
+			go m.loop(context.Background(), cert, renewSignal)
+		}
 	}
 }
