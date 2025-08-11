@@ -63,31 +63,6 @@ func reloadContainer(name, signal string) error {
 	return client.ContainerKill(context.Background(), name, signal)
 }
 
-func installCertificate(cert *certificate.Resource) error {
-	if *certificatePathFlag != "" {
-		err := os.WriteFile(*certificatePathFlag, cert.Certificate, 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	if *keyPathFlag != "" {
-		err := os.WriteFile(*keyPathFlag, cert.PrivateKey, 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	if *reloadContainerFlag != "" {
-		log.Printf("reloading container %s", *reloadContainerFlag)
-		err := reloadContainer(*reloadContainerFlag, *reloadSignalFlag)
-		if err != nil {
-			log.Printf("could not reload container: %v", err)
-		}
-	}
-
-	return nil
-}
 
 func main() {
 	flag.Parse()
@@ -120,12 +95,6 @@ func main() {
 		log.Fatalf("could not create client: %v", err)
 	}
 	
-	/* Parse multiple domain names, certificates and keys,
-	   then feed things one by one into the original global vars
-	   which are used in NewCertManager. Overwriting the globals
-	   is a bit gross, but is it the cleanest way here?
-	*/
-	
 	splitDomains := strings.Split(*domainFlag, ",")
 	splitCertPaths:= strings.Split(*certificatePathFlag, ",")
 	splitKeyPaths := strings.Split(*keyPathFlag, ",")
@@ -138,23 +107,49 @@ func main() {
 	var certs []*x509.Certificate
 
 	for i := 0; i < len(splitDomains); i++ {
-		*domainFlag = strings.TrimSpace(splitDomains[i])
-		*certificatePathFlag = strings.TrimSpace(splitCertPaths[i])
-		*keyPathFlag = strings.TrimSpace(splitKeyPaths[i])
+		singleDomain := strings.TrimSpace(splitDomains[i])
+		singleCertPath := strings.TrimSpace(splitCertPaths[i])
+		singleKeyPath := strings.TrimSpace(splitKeyPaths[i])
 		
 		var cert *x509.Certificate
-		if *certificatePathFlag != "" && !*forceFlag {
-			certLoaded, err := LoadCertificate(*certificatePathFlag)
+		if singleCertPath!= "" && !*forceFlag {
+			certLoaded, err := LoadCertificate(singleCertPath)
 			if err != nil {
 				log.Printf("could not read certificate, will request a new one: %v", err)
-			} else if !slices.Equal(certLoaded[0].DNSNames, []string{*domainFlag}) {
+			} else if !slices.Equal(certLoaded[0].DNSNames, []string{singleDomain}) {
 				log.Printf("DNS names in existing certificate do not match, will request a new certificate")
 			} else {
 				cert = certLoaded[0]
 			}
 		}
+		
+		installCertFunc := func(cert *certificate.Resource) error {
+			if singleCertPath != "" {
+				err := os.WriteFile(singleCertPath, cert.Certificate, 0644)
+				if err != nil {
+					return err
+				}
+			}
 
-		m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, *domainFlag, installCertificate)
+			if singleKeyPath != "" {
+				err := os.WriteFile(singleKeyPath, cert.PrivateKey, 0644)
+				if err != nil {
+					return err
+				}
+			}
+
+			if *reloadContainerFlag != "" {
+				log.Printf("reloading container %s", *reloadContainerFlag)
+				err := reloadContainer(*reloadContainerFlag, *reloadSignalFlag)
+				if err != nil {
+					log.Printf("could not reload container: %v", err)
+				}
+			}
+
+			return nil
+		}
+
+		m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, singleDomain, installCertFunc)
 		managers = append(managers, m)
 		certs = append(certs, cert)
 	}
