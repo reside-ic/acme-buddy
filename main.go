@@ -137,7 +137,7 @@ func main() {
 	var managers []*CertManager
 	var certs []*x509.Certificate
 
-	for i := 0; i < len(splitDomains); i++) {
+	for i := 0; i < len(splitDomains); i++ {
 		*domainFlag = strings.TrimSpace(splitDomains[i])
 		*certificatePathFlag = strings.TrimSpace(splitCertPaths[i])
 		*keyPathFlag = strings.TrimSpace(splitKeyPaths[i])
