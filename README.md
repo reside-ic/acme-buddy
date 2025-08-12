@@ -16,9 +16,8 @@ used to register `<FQDN>`.
 
 Usually `<FQDN>` is a single domain; if you would like multiple 
 subjectAlternativeNames (SANs) in the certificate, then include a 
-comma-separated string of domain names here. The first of these is
-assumed to be the most significant, and will be the one used when reporting
-metrics - see below.
+comma-separated string of domain names here. The first of these will be
+the one used when reporting metrics - see below.
 
 ```sh
 docker run \
