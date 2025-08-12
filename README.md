@@ -14,6 +14,12 @@ The most basic usage is show below. `<FQDN>` and `<PROVIDER>` should be
 replaced by their appropriate values. The provider should match the service
 used to register `<FQDN>`.
 
+Usually `<FQDN>` is a single domain; if you would like multiple 
+subjectAlternativeNames (SANs) in the certificate, then include a 
+comma-separated string of domain names here. The first of these is
+assumed to be the most significant, and will be the one used when reporting
+metrics - see below.
+
 ```sh
 docker run \
     --env-file credentials \
