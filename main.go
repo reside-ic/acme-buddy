@@ -92,11 +92,6 @@ func installCertificate(cert *certificate.Resource) error {
 func main() {
 	flag.Parse()
 
-	domains := strings.Split(*domainFlag, ",")
-	for i := range domains {
-		domains[i] = strings.TrimSpace(domains[i])
-	}
-
 	server := *serverFlag
 	if server == "" {
 		if *stagingFlag {
@@ -112,7 +107,10 @@ func main() {
 		log.Fatal("--domain and --email must be set")
 	}
 	
-	
+	domains := strings.Split(*domainFlag, ",")
+	for i := range domains {
+		domains[i] = strings.TrimSpace(domains[i])
+	}
 
 	// Checking propagation of DNS records won't work during integration tests.
 	// The flag allows us to skip that.
