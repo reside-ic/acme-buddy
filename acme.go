@@ -302,7 +302,7 @@ func NewCertManager(client *lego.Client, renewal time.Duration, domains []string
 	return &certManager{
 		domains:             domains,
 		renewal:            renewal,
-		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domain) },
+		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domains) },
 		installCertificate: installCertificate,
 
 		now:   time.Now,
