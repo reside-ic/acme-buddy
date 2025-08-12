@@ -113,6 +113,7 @@ func newTestCertManager(renewal time.Duration) (*certManager, *callbacks) {
 	}
 
 	m := &certManager{
+		domains:            []string{"example.com"}
 		obtainCertificate:  callbacks.obtainCertificate,
 		installCertificate: callbacks.installCertificate,
 		now:                callbacks.now,
