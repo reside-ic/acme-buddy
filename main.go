@@ -47,8 +47,8 @@ var daysFlag = flag.Int("days", 30, "The number of days left on a certificate be
 var providerFlag = flag.String("dns-provider", "", "The DNS provider to use to provision challenges.")
 var dnsDisableCompletePropagationFlag = flag.Bool("dns-disable-cp", false, "Do not wait for propagation of the DNS records before requesting a certificate.")
 
-var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored. One per domain, comma-separated.")
-var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored. One per domain, comma-separated.")
+var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored.")
+var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored.")
 var accountPathFlag = flag.String("account-path", "", "Path where the account information is stored.")
 
 var reloadContainerFlag = flag.String("reload-container", "", "Name of container to reload after a new certificate is issued.")
@@ -63,9 +63,39 @@ func reloadContainer(name, signal string) error {
 	return client.ContainerKill(context.Background(), name, signal)
 }
 
+func installCertificate(cert *certificate.Resource) error {
+	if *certificatePathFlag != "" {
+		err := os.WriteFile(*certificatePathFlag, cert.Certificate, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *keyPathFlag != "" {
+		err := os.WriteFile(*keyPathFlag, cert.PrivateKey, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *reloadContainerFlag != "" {
+		log.Printf("reloading container %s", *reloadContainerFlag)
+		err := reloadContainer(*reloadContainerFlag, *reloadSignalFlag)
+		if err != nil {
+			log.Printf("could not reload container: %v", err)
+		}
+	}
+
+	return nil
+}
 
 func main() {
 	flag.Parse()
+
+	domains := strings.Split(*domainFlag, ",")
+	for i := range domains {
+		domains[i] = strings.TrimSpace(domains[i])
+	}
 
 	server := *serverFlag
 	if server == "" {
@@ -81,6 +111,8 @@ func main() {
 	if *domainFlag == "" || *emailFlag == "" {
 		log.Fatal("--domain and --email must be set")
 	}
+	
+	
 
 	// Checking propagation of DNS records won't work during integration tests.
 	// The flag allows us to skip that.
@@ -94,88 +126,37 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not create client: %v", err)
 	}
-	
-	splitDomains := strings.Split(*domainFlag, ",")
-	splitCertPaths:= strings.Split(*certificatePathFlag, ",")
-	splitKeyPaths := strings.Split(*keyPathFlag, ",")
-	
-	if len(splitDomains) != len(splitCertPaths) ||  len(splitDomains) != len(splitKeyPaths) {
-		log.Fatal("Inconsistent numbers of domains, certs, or keys specified.")
-	}	
 
-	var managers []*certManager
-	var certs []*x509.Certificate
-
-	for i := 0; i < len(splitDomains); i++ {
-		singleDomain := strings.TrimSpace(splitDomains[i])
-		singleCertPath := strings.TrimSpace(splitCertPaths[i])
-		singleKeyPath := strings.TrimSpace(splitKeyPaths[i])
-		
-		var cert *x509.Certificate
-		if singleCertPath!= "" && !*forceFlag {
-			certLoaded, err := LoadCertificate(singleCertPath)
-			if err != nil {
-				log.Printf("could not read certificate, will request a new one: %v", err)
-			} else if !slices.Equal(certLoaded[0].DNSNames, []string{singleDomain}) {
-				log.Printf("DNS names in existing certificate do not match, will request a new certificate")
-			} else {
-				cert = certLoaded[0]
-			}
+	var cert *x509.Certificate
+	if *certificatePathFlag != "" && !*forceFlag {
+		certs, err := LoadCertificate(*certificatePathFlag)
+		if err != nil {
+			log.Printf("could not read certificate, will request a new one: %v", err)
+		} else if !slices.Equal(certs[0].DNSNames, domains) {
+			log.Printf("DNS names in existing certificate do not match, will request a new certificate")
+		} else {
+			cert = certs[0]
 		}
-		
-		installCertFunc := func(cert *certificate.Resource) error {
-			if singleCertPath != "" {
-				err := os.WriteFile(singleCertPath, cert.Certificate, 0644)
-				if err != nil {
-					return err
-				}
-			}
-
-			if singleKeyPath != "" {
-				err := os.WriteFile(singleKeyPath, cert.PrivateKey, 0644)
-				if err != nil {
-					return err
-				}
-			}
-
-			if *reloadContainerFlag != "" {
-				log.Printf("reloading container %s", *reloadContainerFlag)
-				err := reloadContainer(*reloadContainerFlag, *reloadSignalFlag)
-				if err != nil {
-					log.Printf("could not reload container: %v", err)
-				}
-			}
-
-			return nil
-		}
-
-		m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, singleDomain, installCertFunc)
-		managers = append(managers, m)
-		certs = append(certs, cert)
 	}
-	
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(*metricsFlag, nil)
-	renewSignal := make(chan os.Signal)
-	signal.Notify(renewSignal, syscall.SIGHUP)
 
+	m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, domains, installCertificate)
 	if *oneshotFlag {
-		for i, m := range managers {
-			cert := certs[i]
-			if cert == nil || m.needsRenewal(cert) {
-				cert, _, err := m.renew()
-				if err != nil {
-					log.Fatal(err)
-				}
-				log.Printf("issued certificate is valid until %v", cert.NotAfter)
-			} else {
-				log.Printf("certificate is still valid until %v", cert.NotAfter)
+		if cert == nil || m.needsRenewal(cert) {
+			cert, _, err := m.renew()
+			if err != nil {
+				log.Fatal(err)
 			}
+			log.Printf("issued certificate is valid until %v", cert.NotAfter)
+		} else {
+			log.Printf("certificate is still valid until %v", cert.NotAfter)
 		}
 	} else {
-		for i, m := range managers {
-			go m.loop(context.Background(), certs[i], renewSignal)
-		}
-		select {}
+		http.Handle("/metrics", promhttp.Handler())
+		go http.ListenAndServe(*metricsFlag, nil)
+
+		renewSignal := make(chan os.Signal)
+		signal.Notify(renewSignal, syscall.SIGHUP)
+
+		m.loop(context.Background(), cert, renewSignal)
 	}
 }
