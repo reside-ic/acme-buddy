@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,7 +38,7 @@ func boolEnv(name string, fallback bool) bool {
 var metricsFlag = flag.String("metrics", ":2112", "The host and port on which to expose metrics.")
 var serverFlag = flag.String("server", "", "The URL to the ACME server's directory. If unset, Let's Encrypt is used by default.")
 var stagingFlag = flag.Bool("staging", boolEnv("ACME_BUDDY_STAGING", false), "Use the staging Let's Encrypt environment.")
-var domainFlag = flag.String("domain", "", "The domain name to use in the certificate.")
+var domainFlag = flag.String("domain", "", "The domain name to use in the certificate. For multiple domains for this server, can be comma-separated.")
 var emailFlag = flag.String("email", "", "The email address used for registration.")
 
 var forceFlag = flag.Bool("force", false, "Renew the certificate even if the existing one is still valid.")
@@ -105,6 +106,11 @@ func main() {
 	if *domainFlag == "" || *emailFlag == "" {
 		log.Fatal("--domain and --email must be set")
 	}
+	
+	domains := strings.Split(*domainFlag, ",")
+	for i := range domains {
+		domains[i] = strings.TrimSpace(domains[i])
+	}
 
 	// Checking propagation of DNS records won't work during integration tests.
 	// The flag allows us to skip that.
@@ -124,14 +130,14 @@ func main() {
 		certs, err := LoadCertificate(*certificatePathFlag)
 		if err != nil {
 			log.Printf("could not read certificate, will request a new one: %v", err)
-		} else if !slices.Equal(certs[0].DNSNames, []string{*domainFlag}) {
+		} else if !slices.Equal(certs[0].DNSNames, domains) {
 			log.Printf("DNS names in existing certificate do not match, will request a new certificate")
 		} else {
 			cert = certs[0]
 		}
 	}
 
-	m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, *domainFlag, installCertificate)
+	m := NewCertManager(client, time.Duration(*daysFlag)*24*time.Hour, domains, installCertificate)
 	if *oneshotFlag {
 		if cert == nil || m.needsRenewal(cert) {
 			cert, _, err := m.renew()

@@ -96,9 +96,9 @@ func RegisterAccount(client *lego.Client, account *Account) error {
 	return nil
 }
 
-func ObtainCertificate(client *lego.Client, domain string) (*certificate.Resource, error) {
+func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Resource, error) {
 	request := certificate.ObtainRequest{
-		Domains: []string{domain},
+		Domains: domains,
 		Bundle:  true,
 	}
 
@@ -165,7 +165,7 @@ func createClient(server, email, accountPath string, opts []dns01.ChallengeOptio
 }
 
 type certManager struct {
-	domain             string
+	domains            []string
 	renewal            time.Duration
 	obtainCertificate  func() (*certificate.Resource, error)
 	installCertificate func(cert *certificate.Resource) error
@@ -217,7 +217,7 @@ func (m *certManager) renew() (*x509.Certificate, time.Time, error) {
 func (m *certManager) updateCertificateMetrics(cert *x509.Certificate) {
 	fingerprint := sha256.Sum256(cert.Raw)
 
-	metricCertificateExpiry.WithLabelValues(m.domain).Set(float64(cert.NotAfter.Unix()))
+	metricCertificateExpiry.WithLabelValues(m.domains[0]).Set(float64(cert.NotAfter.Unix()))
 
 	// This metric is designed to match the blackbox_exporter's metric:
 	// https://github.com/prometheus/blackbox_exporter/blob/f77c50ed7c0f39b734235931e773cf7b5af1fc8a/prober/tls.go
@@ -232,7 +232,7 @@ func (m *certManager) updateCertificateMetrics(cert *x509.Certificate) {
 	// what the current certificate info is, hence the `Reset()` call.
 	metricCertificateInfo.Reset()
 	metricCertificateInfo.With(prometheus.Labels{
-		"domain":             m.domain,
+		"domain":             m.domains[0],
 		"fingerprint_sha256": hex.EncodeToString(fingerprint[:]),
 		"subject":            cert.Subject.String(),
 		"issuer":             cert.Issuer.String(),
@@ -242,7 +242,7 @@ func (m *certManager) updateCertificateMetrics(cert *x509.Certificate) {
 }
 
 func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, forceRenewal <-chan os.Signal) error {
-	labels := prometheus.Labels{"domain": m.domain}
+	labels := prometheus.Labels{"domain": m.domains[0]}
 
 	var b *backoff.Backoff
 	if m.noJitter {
@@ -298,11 +298,11 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, force
 	}
 }
 
-func NewCertManager(client *lego.Client, renewal time.Duration, domain string, installCertificate func(cert *certificate.Resource) error) *certManager {
+func NewCertManager(client *lego.Client, renewal time.Duration, domains []string, installCertificate func(cert *certificate.Resource) error) *certManager {
 	return &certManager{
-		domain:             domain,
+		domains:             domains,
 		renewal:            renewal,
-		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domain) },
+		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domains) },
 		installCertificate: installCertificate,
 
 		now:   time.Now,

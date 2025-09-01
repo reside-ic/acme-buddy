@@ -283,6 +283,36 @@ func (suite *TestSuite) TestCanObtainCertificate() {
 	suite.Require().NoError(err)
 }
 
+func (suite *TestSuite) TestCanObtainMultiSANCertificate() {
+	ctx := suite.Context()
+	cert, err := suite.obtainCertificate("www.example.com,www.dotdot.com")
+	suite.Require().NoError(err)
+	expectedNames := []string{"www.example.com", "www.dotdot.com"}
+	suite.ElementsMatch(cert.Leaf.DNSNames, expectedNames)
+
+	root, err := suite.GetRootCA(ctx)
+	suite.Require().NoError(err)
+
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+
+	intermediates := x509.NewCertPool()
+	for _, der := range cert.Certificate[1:] {
+		c, err := x509.ParseCertificate(der)
+		suite.Require().NoError(err)
+		intermediates.AddCert(c)
+	}
+
+	for _, name := range expectedNames {
+		_, err = cert.Leaf.Verify(x509.VerifyOptions{
+			DNSName:       name,
+			Roots:         roots,
+			Intermediates: intermediates,
+		})
+		suite.Require().NoError(err)
+	}
+}
+
 func (suite *TestSuite) TestCertificateRenewal() {
 	const Day time.Duration = 24 * time.Hour
 
