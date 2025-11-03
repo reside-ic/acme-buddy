@@ -71,6 +71,9 @@ and exit immediately, instead of waiting to renew it. This can be used during
 the initial deployment stage to avoid races between acme-buddy and the web
 server container starting up.
 
+For testing, the `--disable-tls-verify` flag will allow use of a self-signed
+certificate, such as the one used by pebble in the tests.
+
 ## DNS Providers
 
 Only two DNS providers are currently supported, Cloudflare and HDB. HDB is the

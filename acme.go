@@ -105,7 +105,7 @@ func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Reso
 	return client.Certificate.Obtain(request)
 }
 
-func createClient(server, email, accountPath string, opts []dns01.ChallengeOption) (*lego.Client, error) {
+func createClient(server, email, accountPath string, skipTLSVerify bool, opts []dns01.ChallengeOption) (*lego.Client, error) {
 	var err error
 	var account *Account
 	if accountPath != "" {
@@ -134,6 +134,15 @@ func createClient(server, email, accountPath string, opts []dns01.ChallengeOptio
 			Timeout: 30 * time.Second,
 		},
 	}
+
+  if skipTLSVerify {
+    defaultTransport, ok := config.HTTPClient.Transport.(*http.Transport)
+		if ok { // This is always true because the default client used by the CLI defined the transport.
+			tr := defaultTransport.Clone()
+			tr.TLSClientConfig.InsecureSkipVerify = true
+			config.HTTPClient.Transport = tr
+		}
+  }
 
 	client, err := lego.NewClient(config)
 	if err != nil {

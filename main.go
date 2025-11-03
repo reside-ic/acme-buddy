@@ -53,6 +53,7 @@ var accountPathFlag = flag.String("account-path", "", "Path where the account in
 
 var reloadContainerFlag = flag.String("reload-container", "", "Name of container to reload after a new certificate is issued.")
 var reloadSignalFlag = flag.String("reload-signal", "SIGHUP", "Signal used to reload the container.")
+var disableTLSVerifyFlag = flag.Bool("disable-tls-verify", false, "Disable TLS verification for testing.")
 
 func reloadContainer(name, signal string) error {
 	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -120,7 +121,7 @@ func main() {
 			dns01.DisableCompletePropagationRequirement()),
 	}
 
-	client, err := createClient(server, *emailFlag, *accountPathFlag, dnsOpts)
+	client, err := createClient(server, *emailFlag, *accountPathFlag, *disableTLSVerifyFlag, dnsOpts)
 	if err != nil {
 		log.Fatalf("could not create client: %v", err)
 	}
