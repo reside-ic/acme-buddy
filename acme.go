@@ -125,12 +125,12 @@ func generateSelfSignedCert(domains []string) (certPEM, keyPEM []byte, err error
 	
 	certDER, err := x509.CreateCertificate(crand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		log.Fatalf("Failed to create certificate, %w", err)
+		log.Fatalf("Failed to create certificate, %v", err)
 	}
 	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	keyBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		log.Fatalf("Failed to marshal privat ekey, %w", err)
+		log.Fatalf("Failed to marshal privat ekey, %v", err)
 	}
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
 	
