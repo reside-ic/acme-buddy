@@ -106,7 +106,7 @@ func main() {
 	
 	if *selfSignFlag && *providerFlag != "" {
 	  log.Fatal("Only specify one of --self-signed and --dns-provider")
-}
+	}
 
 	if *domainFlag == "" || *emailFlag == "" {
 		log.Fatal("--domain and --email must be set")

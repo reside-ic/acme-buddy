@@ -122,7 +122,6 @@ func generateSelfSignedCert(domains []string) (certPEM, keyPEM []byte, err error
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
-	
 	certDER, err := x509.CreateCertificate(crand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
 		log.Fatalf("Failed to create certificate, %v", err)
@@ -133,9 +132,7 @@ func generateSelfSignedCert(domains []string) (certPEM, keyPEM []byte, err error
 		log.Fatalf("Failed to marshal privat ekey, %v", err)
 	}
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
-	
 	return certPEM, keyPEM, nil
-	
 }
 
 func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Resource, error) {
