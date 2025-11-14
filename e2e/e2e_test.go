@@ -33,18 +33,9 @@ import (
 var imageFlag = flag.String("image", "", "Image name to test")
 
 func createTestCertificate(template x509.Certificate) (*certificate.Resource, *x509.Certificate, error) {
-	// This isn't enough entropy and maybe not super compliant but good enough
-	// for tests. In go1.24+ we could just leave the serial set to nil and let
-	// x509.CreateCertificate generate a proper one.
-	if template.SerialNumber == nil {
-		maxSerial := big.NewInt(1 << 32)
-		serial, err := rand.Int(rand.Reader, maxSerial)
-		if err != nil {
-			return nil, nil, err
-		}
-		template.SerialNumber = serial
-	}
-
+	template.KeyUsage = x509.KeyUsageDigitalSignature
+	template.BasicConstraintsValid = true
+	templateExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
