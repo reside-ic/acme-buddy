@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
-	"math/big"
 	"time"
 
 	"github.com/go-acme/lego/v4/certificate"
