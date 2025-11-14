@@ -16,7 +16,7 @@ import (
 func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
 	template := x509.Certificate{
@@ -28,17 +28,17 @@ func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x5
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
 	cert, err := x509.ParseCertificate(derBytes)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 	
 	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
 	return &certificate.Resource{

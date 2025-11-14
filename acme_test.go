@@ -93,7 +93,7 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 	ctx := testContext(t)
 	m, callbacks := newTestCertManager(60 * time.Minute)
 
-	cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
+	cert, _, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 	mock.InOrder(
 		callbacks.On("obtainCertificate").Return(cert, nil).Once(),
 		callbacks.On("installCertificate", cert).Return(nil).Once(),
@@ -113,7 +113,7 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()
 
-	_, cert := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
+	_, cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 
 	go m.loop(ctx, cert, nil)
 
@@ -121,7 +121,7 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 		callbacks.AssertExpectations(t)
 		callbacks.On("after", mock.Anything).Unset()
 
-		renewedCert, _ := createSelfSignedCertificate(callbacks.time.Add(240 * time.Minute))
+		renewedCert, _, _ := createSelfSignedCertificate(callbacks.time.Add(240 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(renewedCert, nil).Once(),
 			callbacks.On("installCertificate", renewedCert).Return(nil).Once(),
@@ -164,7 +164,7 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 		callbacks.On("after", mock.Anything).Unset()
 
 		// Errors on installCertificate also get retried.
-		cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
+		cert, _, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil),
 			callbacks.On("installCertificate", cert).Return(errors.New("failure")),
@@ -181,7 +181,7 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 		callbacks.On("after", mock.Anything).Unset()
 
 		// Allow the issuance to succeed. Manager will sleep until expiry.
-		cert, _ := createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
+		cert, _, _:= createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil),
 			callbacks.On("installCertificate", cert).Return(nil),
@@ -220,13 +220,13 @@ func TestCanForceRenewalWithSignal(t *testing.T) {
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()
 
-	_, cert := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
+	_, cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 	forceRenewal := make(chan os.Signal, 1)
 	go m.loop(ctx, cert, forceRenewal)
 
 	callbacks.barrier(func() bool {
 		callbacks.AssertExpectations(t)
-		cert, _ := createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
+		cert, _, _ := createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil).Once(),
 			callbacks.On("installCertificate", cert).Return(nil).Once(),

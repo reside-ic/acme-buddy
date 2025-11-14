@@ -100,7 +100,9 @@ func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Reso
 	if *selfSignFlag {
 		log.Printf("Generating self-signed certificate for %v", domains)
 		notAfter := time.Now().Add(90 * 24 * time.Hour)
-		res, _ := createSelfSignedCertificate(notAfter)
+		res, cert, err := createSelfSignedCertificate(notAfter)
+		if err != nil {
+			return nil, err
 		return &certificate.Resource{
 			Domain:	domains[0],
 			Certificate:	res.Certificate,
