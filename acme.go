@@ -2,18 +2,13 @@ package main
 
 import (
 	"context"
-	crand "crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log"
-	"math/big"
 	"math/rand"
 	"net/http"
 	"os"
@@ -101,51 +96,15 @@ func RegisterAccount(client *lego.Client, account *Account) error {
 	return nil
 }
 
-// Inspired by https://go.dev/src/crypto/tls/generate_cert.go
-func generateSelfSignedCert(domains []string) (certPEM, keyPEM []byte, err error) {
-	priv, err := rsa.GenerateKey(crand.Reader, 2048)
-	if err != nil {
-		log.Fatalf("Failed to generate private key: %v", err)
-	}
-	serialNumber, err := crand.Int(crand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		log.Fatalf("Failed to generate serial number: %v", err)
-	}
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      pkix.Name{
-			Organization: []string{"Reside"}, 
-		},
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(30 * 24 * time.Hour),
-		DNSNames:     domains,
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	certDER, err := x509.CreateCertificate(crand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		log.Fatalf("Failed to create certificate, %v", err)
-	}
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	keyBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-	if err != nil {
-		log.Fatalf("Failed to marshal privat ekey, %v", err)
-	}
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyBytes})
-	return certPEM, keyPEM, nil
-}
-
 func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Resource, error) {
 	if *selfSignFlag {
 		log.Printf("Generating self-signed certificate for %v", domains)
-		certPEM, keyPEM, err := generateSelfSignedCert(domains)
-		if err != nil {
-			log.Fatalf("Failed to create self-signed certificate, %v", err)
-		}
+		notAfter := time.Now().Add(30 * 24 * time.Hour)
+		res, _ := createTestCertificate(notAfter)
 		return &certificate.Resource{
 			Domain:	domains[0],
-			Certificate:	certPEM,
-			PrivateKey:	keyPEM,
+			Certificate:	res.Certificate,
+			PrivateKey:	res.PrivateKey,
 		}, nil
 	}
 	request := certificate.ObtainRequest{
