@@ -44,5 +44,5 @@ func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x5
 	return &certificate.Resource{
 		Certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
 		PrivateKey:  pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes}),
-	}, cert
+	}, cert, nil
 }
