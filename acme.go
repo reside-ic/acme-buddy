@@ -7,10 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -19,7 +17,6 @@ import (
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge"
-	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/cloudflare"
 	"github.com/go-acme/lego/v4/registration"
@@ -96,88 +93,7 @@ func RegisterAccount(client *lego.Client, account *Account) error {
 	return nil
 }
 
-func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Resource, error) {
-	if *selfSignFlag {
-		log.Printf("Generating self-signed certificate for %v", domains)
-		notAfter := time.Now().Add(90 * 24 * time.Hour)
-		res, _, err := createSelfSignedCertificate(notAfter)
-		if err != nil {
-			return nil, err
-		}
-		return &certificate.Resource{
-			Domain:	domains[0],
-			Certificate:	res.Certificate,
-			PrivateKey:	res.PrivateKey,
-		}, nil
-	}
-	request := certificate.ObtainRequest{
-		Domains: domains,
-		Bundle:  true,
-	}
 
-	return client.Certificate.Obtain(request)
-}
-
-func createClient(server, email, accountPath string, opts []dns01.ChallengeOption) (*lego.Client, error) {
-	var err error
-	var account *Account
-	if accountPath != "" {
-		account, err = ReadAccount(accountPath)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, err
-		}
-		if err == nil && (account.Server != server || account.Email != email) {
-			log.Printf("existing account details do not match configuration, a new account will be created")
-			account = nil
-		}
-	}
-	if account == nil {
-		account, err = NewAccount(server, email)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	config := &lego.Config{
-		CADirURL:   server,
-		User:       account,
-		HTTPClient: http.DefaultClient,
-		Certificate: lego.CertificateConfig{
-			KeyType: certcrypto.RSA2048,
-			Timeout: 30 * time.Second,
-		},
-	}
-
-	client, err := lego.NewClient(config)
-	if err != nil {
-		return nil, err
-	}
-
-	if !*selfSignFlag {
-		provider, err := GetDNSProvider()
-		if err != nil {
-			return nil, err
-		}
-
-		client.Challenge.SetDNS01Provider(provider, opts...)
-	}
-
-	if account.Registration == nil {
-		err = RegisterAccount(client, account)
-		if err != nil {
-			return nil, err
-		}
-
-		if accountPath != "" {
-			err = StoreAccount(accountPath, account)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return client, nil
-}
 
 type certManager struct {
 	domains            []string
@@ -313,11 +229,11 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, force
 	}
 }
 
-func NewCertManager(client *lego.Client, renewal time.Duration, domains []string, installCertificate func(cert *certificate.Resource) error) *certManager {
+func NewCertManager(client CertificateClient, renewal time.Duration, domains []string, installCertificate func(cert *certificate.Resource) error) *certManager {
 	return &certManager{
 		domains:             domains,
 		renewal:            renewal,
-		obtainCertificate:  func() (*certificate.Resource, error) { return ObtainCertificate(client, domains) },
+		obtainCertificate:  func() (*certificate.Resource, error) { return client.ObtainCertificate(domains) },
 		installCertificate: installCertificate,
 
 		now:   time.Now,

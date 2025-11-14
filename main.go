@@ -125,9 +125,15 @@ func main() {
 			dns01.DisableCompletePropagationRequirement()),
 	}
 
-	client, err := createClient(server, *emailFlag, *accountPathFlag, dnsOpts)
-	if err != nil {
-		log.Fatalf("could not create client: %v", err)
+	var client CertificateClient
+	var err error
+	if *selfSignFlag {
+    client = createSelfSignedClient()
+	} else {
+		client, err = createAcmeClient(server, *emailFlag, *accountPathFlag, dnsOpts)
+		if err != nil {
+			log.Fatalf("could not create ACME client: %v", err)
+		}
 	}
 
 	var cert *x509.Certificate
