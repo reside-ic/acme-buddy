@@ -13,28 +13,18 @@ import (
 
 
 // Create a test self-signed certificate, using the given notAfter time
-func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate) {
+func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		panic(err)
 	}
 
-	// This isn't enough entropy and maybe not super compliant but good enough
-	// for tests. In go1.24+ we could just set the serial to nil and let
-	// x509.CreateCertificate generate a proper one.
-	maxSerial := big.NewInt(1 << 32)
-	serial, err := rand.Int(rand.Reader, maxSerial)
-	if err != nil {
-		panic(err)
-	}
-
 	template := x509.Certificate{
-		NotAfter: notAfter, 
-		SerialNumber: serial,
+		NotAfter: notAfter,
 		NotBefore: time.Now().Add(-time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
-		IsCA: true,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
 	if err != nil {

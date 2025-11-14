@@ -99,7 +99,7 @@ func RegisterAccount(client *lego.Client, account *Account) error {
 func ObtainCertificate(client *lego.Client, domains []string) (*certificate.Resource, error) {
 	if *selfSignFlag {
 		log.Printf("Generating self-signed certificate for %v", domains)
-		notAfter := time.Now().Add(30 * 24 * time.Hour)
+		notAfter := time.Now().Add(90 * 24 * time.Hour)
 		res, _ := createTestCertificate(notAfter)
 		return &certificate.Resource{
 			Domain:	domains[0],
