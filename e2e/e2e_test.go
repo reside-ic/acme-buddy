@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"flag"
 	"io"
-	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,7 +34,7 @@ var imageFlag = flag.String("image", "", "Image name to test")
 func createTestCertificate(template x509.Certificate) (*certificate.Resource, *x509.Certificate, error) {
 	template.KeyUsage = x509.KeyUsageDigitalSignature
 	template.BasicConstraintsValid = true
-	templateExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
