@@ -194,7 +194,7 @@ func (m *certManager) loop(ctx context.Context, initial *x509.Certificate, force
 
 func NewCertManager(client CertificateClient, renewal time.Duration, domains []string, installCertificate func(cert *certificate.Resource) error) *certManager {
 	return &certManager{
-		domains:             domains,
+		domains:            domains,
 		renewal:            renewal,
 		obtainCertificate:  func() (*certificate.Resource, error) { return client.ObtainCertificate(domains) },
 		installCertificate: installCertificate,

@@ -11,7 +11,7 @@ import (
 	"github.com/go-acme/lego/v4/certificate"
 )
 
-// Create a test self-signed certificate, using the given notAfter time
+// Create a self-signed certificate, using the given notAfter time
 func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -20,7 +20,6 @@ func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, *x5
 
 	template := x509.Certificate{
 		NotAfter: notAfter,
-		NotBefore: time.Now().Add(-time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
