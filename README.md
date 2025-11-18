@@ -71,8 +71,8 @@ and exit immediately, instead of waiting to renew it. This can be used during
 the initial deployment stage to avoid races between acme-buddy and the web
 server container starting up.
 
-The `--self-signed` flag is also provided for testing, which will cause ACME
-to generate a self-signed certificate instead of any attempt to contact
+The `--self-signed` flag is also provided for testing, which will cause acme-buddy
+to generate self-signed certificates instead of any attempt to contact
 LetsEncrypt, or to perform any DNS verficiation. Hence it is alternative to
 `--dns-provider` and they cannot both be specified.
 
