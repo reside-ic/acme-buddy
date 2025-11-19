@@ -32,7 +32,7 @@ type callbacks struct {
 	ch   chan wakeup
 }
 
-func (c *callbacks) obtainCertificate() (*certificate.Resource, error) {
+func (c *callbacks) obtainCertificate(domains []string) (*certificate.Resource, error) {
 	args := c.Called()
 	if args.Get(0) != nil {
 		return args.Get(0).(*certificate.Resource), args.Error(1)

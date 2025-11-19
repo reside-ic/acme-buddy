@@ -61,7 +61,7 @@ var (
 type certManager struct {
 	domains            []string
 	renewal            time.Duration
-	obtainCertificate  func() (*certificate.Resource, error)
+	obtainCertificate  func(domains []string) (*certificate.Resource, error)
 	installCertificate func(cert *certificate.Resource) error
 	noJitter           bool
 
@@ -90,7 +90,7 @@ func (m *certManager) nextRenewal(cert *x509.Certificate) time.Time {
 // If succesful, it returns the parsed certificate and the time at which to
 // perform the next renewal.
 func (m *certManager) renew() (*x509.Certificate, time.Time, error) {
-	result, err := m.obtainCertificate()
+	result, err := m.obtainCertificate(m.domains)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -196,7 +196,7 @@ func NewCertManager(client CertificateClient, renewal time.Duration, domains []s
 	return &certManager{
 		domains:            domains,
 		renewal:            renewal,
-		obtainCertificate:  func() (*certificate.Resource, error) { return client.ObtainCertificate(domains) },
+		obtainCertificate:  client.ObtainCertificate,
 		installCertificate: installCertificate,
 
 		now:   time.Now,
