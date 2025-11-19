@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"os"
 	"syscall"
@@ -11,15 +10,6 @@ import (
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/stretchr/testify/mock"
 )
-
-// Returns a context that is cancelled at the end of the test.
-//
-// In go1.24+ this can be replaced by t.Context()
-func testContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	return ctx
-}
 
 type wakeup struct {
 	time time.Time
@@ -90,7 +80,7 @@ func newTestCertManager(renewal time.Duration) (*certManager, *callbacks) {
 // When called with a nil existing certificate, the cert manager should
 // immediately try to obtain and install a certificate.
 func TestCertificateIsObtainedImmediately(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 	m, callbacks := newTestCertManager(60 * time.Minute)
 
 	cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
@@ -109,7 +99,7 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 }
 
 func TestSleepsUntilCertificateExpiry(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()
 
@@ -141,7 +131,7 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 // If obtaining a certificate fails, the certificate manager should retry after
 // a short delay. The retry follows an exponential backoff.
 func TestIssuanceIsRetriedOnError(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("obtainCertificate").Return(nil, errors.New("failed"))
@@ -215,7 +205,7 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 }
 
 func TestCanForceRenewalWithSignal(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()

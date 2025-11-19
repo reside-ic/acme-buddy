@@ -95,18 +95,10 @@ type TestSuite struct {
 	pebbleMiniCA []byte
 }
 
-// Returns a context that is cancelled at the end of the test.
-//
-// In go1.24+ this can be replaced by t.Context()
-func (suite *TestSuite) Context() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	suite.T().Cleanup(cancel)
-	return ctx
-}
 
 func (suite *TestSuite) SetupSuite() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	provider, err := tc.NewDockerProvider()
 	require.NoError(t, err)
@@ -155,7 +147,7 @@ func (suite *TestSuite) SetupSuite() {
 }
 
 func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
@@ -198,7 +190,7 @@ func readCertificateFromContainer(ctx context.Context, container tc.Container) (
 }
 
 func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithWaitStrategy(WaitForSuccess()),
@@ -247,7 +239,7 @@ func (suite *TestSuite) GetRootCA(ctx context.Context) (*x509.Certificate, error
 }
 
 func (suite *TestSuite) TestCanObtainCertificate() {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 	cert, err := suite.obtainCertificate("www.example.com")
 	suite.Require().NoError(err)
 	suite.Equal(cert.Leaf.DNSNames, []string{"www.example.com"})
@@ -274,7 +266,7 @@ func (suite *TestSuite) TestCanObtainCertificate() {
 }
 
 func (suite *TestSuite) TestCanObtainMultiSANCertificate() {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 	cert, err := suite.obtainCertificate("www.example.com,www.dotdot.com")
 	suite.Require().NoError(err)
 	expectedNames := []string{"www.example.com", "www.dotdot.com"}
@@ -360,7 +352,7 @@ func (suite *TestSuite) TestCertificateRenewal() {
 
 func (suite *TestSuite) TestCanReloadContainer() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	client, err := tc.NewDockerClientWithOpts(ctx)
 	require.NoError(t, err)
@@ -423,7 +415,7 @@ events { }
 
 func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	container, err := suite.runAcmeBuddy("www.example.com")
 	require.NoError(t, err)
