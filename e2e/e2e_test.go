@@ -439,6 +439,62 @@ func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	assert.NotEqual(t, renewedCert.Leaf.SerialNumber, initialCert.Leaf.SerialNumber)
 }
 
+func (suite *TestSuite) runSelfSignedAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
+	ctx := suite.T().Context()
+
+	opts = append([]tc.ContainerCustomizer{
+		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
+		network.WithNetwork([]string{}, suite.network),
+		tc.WithCmd(
+			"--self-signed",
+			"--domain", domain,
+			"--email=admin@example.com",
+			"--certificate-path=/tls/certificate.pem",
+			"--key-path=/tls/key.pem",
+		),
+	}, append(opts, WithDefaultVolumeMount("/tls"))...)
+
+	return tc.Run(ctx, suite.image, opts...)
+}
+
+func (suite *TestSuite) TestSelfSignedCertificateGeneration() {
+	t := suite.T()
+	ctx := t.Context()
+
+	c, err := suite.runSelfSignedAcmeBuddy("example.com")
+	if err != nil {
+		t.Fatalf("failed to start AcmeBuddy in self-signed mode: %v", err)
+	}
+	defer c.Terminate(ctx)
+
+	time.Sleep(2 * time.Second)
+
+	rc, err := c.CopyFileFromContainer(ctx, "/tls/certificate.pem")
+	if err != nil {
+		t.Fatalf("failed to read certificate.pem: %v", err)
+	}
+	defer rc.Close()
+
+	certBytes, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("failed to read certificate data: %v", err)
+	}
+
+	block, _ := pem.Decode(certBytes)
+	if block == nil {
+		t.Fatal("failed to decode PEM block in certificate.pem")
+	}
+
+	xcert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("failed to parse certificate: %v", err)
+	}
+
+	if xcert.Issuer.String() != xcert.Subject.String() {
+		t.Fatalf("expected a self-signed cert: issuer != subject")
+	}
+}
+
 func TestRunTestSuite(t *testing.T) {
 	suite.Run(t, new(TestSuite))
 }
