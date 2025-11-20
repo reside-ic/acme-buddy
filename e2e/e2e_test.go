@@ -444,6 +444,7 @@ func (suite *TestSuite) runSelfSignedAcmeBuddy(domain string, opts ...tc.Contain
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
+		tc.WithWaitStrategy(WaitForSuccess()),		
 		network.WithNetwork([]string{}, suite.network),
 		tc.WithCmd(
 			"--self-signed",
@@ -466,13 +467,14 @@ func (suite *TestSuite) TestSelfSignedCertificateGeneration() {
 		t.Fatalf("failed to start AcmeBuddy in self-signed mode: %v", err)
 	}
 	defer container.Terminate(ctx)
+	
 	cert, err := readCertificateFromContainer(ctx, container)
 	require.NoError(t, err)
 
 	leaf, err := x509.ParseCertificate(cert.Certificate[0])
 	require.NoError(t, err)
 
-  assert.Equal(t, leaf.Issuer, leaf.Subject, "expected a self-signed cert")
+	assert.Equal(t, leaf.Issuer, leaf.Subject, "expected a self-signed cert")
 }
 
 func TestRunTestSuite(t *testing.T) {
