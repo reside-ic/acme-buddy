@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"testing"
@@ -96,6 +99,24 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 		callbacks.AssertExpectations(t)
 		return false
 	})
+}
+
+func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
+  certRes, err := createSelfSignedCertificate(notAfter)
+	if err != nil {
+	  return nil, nil, err
+  }
+
+	cert_pem, _ := pem.Decode(certRes.Certificate)
+	if cert_pem == nil {
+	  return nil, nil, fmt.Errorf("Failed to decode certificate")
+  }
+
+	parsed_cert, err := x509.ParseCertificate(cert_pem.Bytes)
+	if err != nil {
+	  return nil, nil, err
+	}
+	return certRes, parsed_cert, nil
 }
 
 func TestSleepsUntilCertificateExpiry(t *testing.T) {

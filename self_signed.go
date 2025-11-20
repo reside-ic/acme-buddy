@@ -5,8 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
-	"log"	
+	"log"
 	"time"
 
 	"github.com/go-acme/lego/v4/certificate"
@@ -39,24 +38,6 @@ func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, err
 		Certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
 		PrivateKey:  pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes}),
 	}, nil
-}
-
-func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
-  certRes, err := createSelfSignedCertificate(notAfter)
-	if err != nil {
-	  return nil, nil, err
-  }
-	
-	cert_pem, _ := pem.Decode(certRes.Certificate)
-	if cert_pem == nil {
-	  return nil, nil, fmt.Errorf("Failed to decode certificate")
-  }
-	
-	parsed_cert, err := x509.ParseCertificate(cert_pem.Bytes)
-	if err != nil {
-	  return nil, nil, err
-	}
-	return certRes, parsed_cert, nil
 }
 
 type SelfSignedClient struct {
