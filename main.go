@@ -46,6 +46,7 @@ var oneshotFlag = flag.Bool("oneshot", false, "Renew the certificate (if needed)
 var daysFlag = flag.Int("days", 30, "The number of days left on a certificate before it is renewed.")
 var providerFlag = flag.String("dns-provider", "", "The DNS provider to use to provision challenges.")
 var dnsDisableCompletePropagationFlag = flag.Bool("dns-disable-cp", false, "Do not wait for propagation of the DNS records before requesting a certificate.")
+var selfSignFlag = flag.Bool("self-signed", false, "Generate testing self-signed certificates instead of requesting them from the ACME server.")
 
 var certificatePathFlag = flag.String("certificate-path", "", "Path where the certificate chain is stored.")
 var keyPathFlag = flag.String("key-path", "", "Path where the private key is stored.")
@@ -102,6 +103,10 @@ func main() {
 	} else if *stagingFlag {
 		log.Fatal("Cannot specify both --staging and --server")
 	}
+	
+	if *selfSignFlag && *providerFlag != "" {
+	  log.Fatal("Only specify one of --self-signed and --dns-provider")
+	}
 
 	if *domainFlag == "" || *emailFlag == "" {
 		log.Fatal("--domain and --email must be set")
@@ -120,9 +125,15 @@ func main() {
 			dns01.DisableCompletePropagationRequirement()),
 	}
 
-	client, err := createClient(server, *emailFlag, *accountPathFlag, dnsOpts)
-	if err != nil {
-		log.Fatalf("could not create client: %v", err)
+	var client CertificateClient
+	var err error
+	if *selfSignFlag {
+    client = createSelfSignedClient()
+	} else {
+		client, err = createAcmeClient(server, *emailFlag, *accountPathFlag, dnsOpts)
+		if err != nil {
+			log.Fatalf("could not create ACME client: %v", err)
+		}
 	}
 
 	var cert *x509.Certificate

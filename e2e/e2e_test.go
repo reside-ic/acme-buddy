@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"flag"
 	"io"
-	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,18 +32,9 @@ import (
 var imageFlag = flag.String("image", "", "Image name to test")
 
 func createTestCertificate(template x509.Certificate) (*certificate.Resource, *x509.Certificate, error) {
-	// This isn't enough entropy and maybe not super compliant but good enough
-	// for tests. In go1.24+ we could just leave the serial set to nil and let
-	// x509.CreateCertificate generate a proper one.
-	if template.SerialNumber == nil {
-		maxSerial := big.NewInt(1 << 32)
-		serial, err := rand.Int(rand.Reader, maxSerial)
-		if err != nil {
-			return nil, nil, err
-		}
-		template.SerialNumber = serial
-	}
-
+	template.KeyUsage = x509.KeyUsageDigitalSignature
+	template.BasicConstraintsValid = true
+	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -105,18 +95,10 @@ type TestSuite struct {
 	pebbleMiniCA []byte
 }
 
-// Returns a context that is cancelled at the end of the test.
-//
-// In go1.24+ this can be replaced by t.Context()
-func (suite *TestSuite) Context() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	suite.T().Cleanup(cancel)
-	return ctx
-}
 
 func (suite *TestSuite) SetupSuite() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	provider, err := tc.NewDockerProvider()
 	require.NoError(t, err)
@@ -165,7 +147,7 @@ func (suite *TestSuite) SetupSuite() {
 }
 
 func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
@@ -208,7 +190,7 @@ func readCertificateFromContainer(ctx context.Context, container tc.Container) (
 }
 
 func (suite *TestSuite) obtainCertificate(domain string, opts ...tc.ContainerCustomizer) (tls.Certificate, error) {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithWaitStrategy(WaitForSuccess()),
@@ -257,7 +239,7 @@ func (suite *TestSuite) GetRootCA(ctx context.Context) (*x509.Certificate, error
 }
 
 func (suite *TestSuite) TestCanObtainCertificate() {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 	cert, err := suite.obtainCertificate("www.example.com")
 	suite.Require().NoError(err)
 	suite.Equal(cert.Leaf.DNSNames, []string{"www.example.com"})
@@ -284,7 +266,7 @@ func (suite *TestSuite) TestCanObtainCertificate() {
 }
 
 func (suite *TestSuite) TestCanObtainMultiSANCertificate() {
-	ctx := suite.Context()
+	ctx := suite.T().Context()
 	cert, err := suite.obtainCertificate("www.example.com,www.dotdot.com")
 	suite.Require().NoError(err)
 	expectedNames := []string{"www.example.com", "www.dotdot.com"}
@@ -370,7 +352,7 @@ func (suite *TestSuite) TestCertificateRenewal() {
 
 func (suite *TestSuite) TestCanReloadContainer() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	client, err := tc.NewDockerClientWithOpts(ctx)
 	require.NoError(t, err)
@@ -433,7 +415,7 @@ events { }
 
 func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	t := suite.T()
-	ctx := suite.Context()
+	ctx := t.Context()
 
 	container, err := suite.runAcmeBuddy("www.example.com")
 	require.NoError(t, err)
@@ -455,6 +437,44 @@ func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	require.NoError(t, err)
 
 	assert.NotEqual(t, renewedCert.Leaf.SerialNumber, initialCert.Leaf.SerialNumber)
+}
+
+func (suite *TestSuite) runSelfSignedAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
+	ctx := suite.T().Context()
+
+	opts = append([]tc.ContainerCustomizer{
+		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
+		tc.WithWaitStrategy(WaitForSuccess()),		
+		network.WithNetwork([]string{}, suite.network),
+		tc.WithCmd(
+			"--self-signed",
+			"--domain", domain,
+			"--email=admin@example.com",
+			"--certificate-path=/tls/certificate.pem",
+			"--key-path=/tls/key.pem",
+			"--oneshot",
+		),
+	}, append(opts, WithDefaultVolumeMount("/tls"))...)
+
+	return tc.Run(ctx, suite.image, opts...)
+}
+
+func (suite *TestSuite) TestSelfSignedCertificateGeneration() {
+	t := suite.T()
+	ctx := t.Context()
+	container, err := suite.runSelfSignedAcmeBuddy("example.com")
+	if err != nil {
+		t.Fatalf("failed to start AcmeBuddy in self-signed mode: %v", err)
+	}
+	defer container.Terminate(ctx)
+	
+	cert, err := readCertificateFromContainer(ctx, container)
+	require.NoError(t, err)
+
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	require.NoError(t, err)
+
+	assert.Equal(t, leaf.Issuer, leaf.Subject, "expected a self-signed cert")
 }
 
 func TestRunTestSuite(t *testing.T) {

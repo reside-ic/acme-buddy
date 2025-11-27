@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"math/big"
+	"fmt"
 	"os"
 	"syscall"
 	"testing"
@@ -16,48 +13,6 @@ import (
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/stretchr/testify/mock"
 )
-
-// Returns a context that is cancelled at the end of the test.
-//
-// In go1.24+ this can be replaced by t.Context()
-func testContext(t *testing.T) context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	return ctx
-}
-
-// Create a test self-signed certificate, using the given notAfter time
-func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate) {
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		panic(err)
-	}
-
-	// This isn't enough entropy and maybe not super compliant but good enough
-	// for tests. In go1.24+ we could just set the serial to nil and let
-	// x509.CreateCertificate generate a proper one.
-	maxSerial := big.NewInt(1 << 32)
-	serial, err := rand.Int(rand.Reader, maxSerial)
-	if err != nil {
-		panic(err)
-	}
-
-	template := x509.Certificate{NotAfter: notAfter, SerialNumber: serial}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
-	if err != nil {
-		panic(err)
-	}
-
-	cert, err := x509.ParseCertificate(derBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	return &certificate.Resource{
-		Certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes}),
-		PrivateKey:  pem.EncodeToMemory(&pem.Block{Type: "", Bytes: priv}),
-	}, cert
-}
 
 type wakeup struct {
 	time time.Time
@@ -70,7 +25,7 @@ type callbacks struct {
 	ch   chan wakeup
 }
 
-func (c *callbacks) obtainCertificate() (*certificate.Resource, error) {
+func (c *callbacks) obtainCertificate(domains []string) (*certificate.Resource, error) {
 	args := c.Called()
 	if args.Get(0) != nil {
 		return args.Get(0).(*certificate.Resource), args.Error(1)
@@ -128,10 +83,10 @@ func newTestCertManager(renewal time.Duration) (*certManager, *callbacks) {
 // When called with a nil existing certificate, the cert manager should
 // immediately try to obtain and install a certificate.
 func TestCertificateIsObtainedImmediately(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 	m, callbacks := newTestCertManager(60 * time.Minute)
 
-	cert, _ := createTestCertificate(callbacks.time.Add(180 * time.Minute))
+	cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 	mock.InOrder(
 		callbacks.On("obtainCertificate").Return(cert, nil).Once(),
 		callbacks.On("installCertificate", cert).Return(nil).Once(),
@@ -146,12 +101,30 @@ func TestCertificateIsObtainedImmediately(t *testing.T) {
 	})
 }
 
+func createTestCertificate(notAfter time.Time) (*certificate.Resource, *x509.Certificate, error) {
+  certRes, err := createSelfSignedCertificate(notAfter)
+	if err != nil {
+	  return nil, nil, err
+  }
+
+	cert_pem, _ := pem.Decode(certRes.Certificate)
+	if cert_pem == nil {
+	  return nil, nil, fmt.Errorf("Failed to decode certificate")
+  }
+
+	parsed_cert, err := x509.ParseCertificate(cert_pem.Bytes)
+	if err != nil {
+	  return nil, nil, err
+	}
+	return certRes, parsed_cert, nil
+}
+
 func TestSleepsUntilCertificateExpiry(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()
 
-	_, cert := createTestCertificate(callbacks.time.Add(180 * time.Minute))
+	_, cert, _ := createTestCertificate(callbacks.time.Add(180 * time.Minute))
 
 	go m.loop(ctx, cert, nil)
 
@@ -159,7 +132,7 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 		callbacks.AssertExpectations(t)
 		callbacks.On("after", mock.Anything).Unset()
 
-		renewedCert, _ := createTestCertificate(callbacks.time.Add(240 * time.Minute))
+		renewedCert, _ := createSelfSignedCertificate(callbacks.time.Add(240 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(renewedCert, nil).Once(),
 			callbacks.On("installCertificate", renewedCert).Return(nil).Once(),
@@ -179,7 +152,7 @@ func TestSleepsUntilCertificateExpiry(t *testing.T) {
 // If obtaining a certificate fails, the certificate manager should retry after
 // a short delay. The retry follows an exponential backoff.
 func TestIssuanceIsRetriedOnError(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("obtainCertificate").Return(nil, errors.New("failed"))
@@ -202,7 +175,7 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 		callbacks.On("after", mock.Anything).Unset()
 
 		// Errors on installCertificate also get retried.
-		cert, _ := createTestCertificate(callbacks.time.Add(180 * time.Minute))
+		cert, _ := createSelfSignedCertificate(callbacks.time.Add(180 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil),
 			callbacks.On("installCertificate", cert).Return(errors.New("failure")),
@@ -219,7 +192,7 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 		callbacks.On("after", mock.Anything).Unset()
 
 		// Allow the issuance to succeed. Manager will sleep until expiry.
-		cert, _ := createTestCertificate(callbacks.time.Add(120 * time.Minute))
+		cert, _:= createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil),
 			callbacks.On("installCertificate", cert).Return(nil),
@@ -253,18 +226,18 @@ func TestIssuanceIsRetriedOnError(t *testing.T) {
 }
 
 func TestCanForceRenewalWithSignal(t *testing.T) {
-	ctx := testContext(t)
+	ctx := t.Context()
 
 	m, callbacks := newTestCertManager(60 * time.Minute)
 	callbacks.On("after", 120*time.Minute).Return().Once()
 
-	_, cert := createTestCertificate(callbacks.time.Add(180 * time.Minute))
+	_, cert, _ := createTestCertificate(callbacks.time.Add(180 * time.Minute))
 	forceRenewal := make(chan os.Signal, 1)
 	go m.loop(ctx, cert, forceRenewal)
 
 	callbacks.barrier(func() bool {
 		callbacks.AssertExpectations(t)
-		cert, _ := createTestCertificate(callbacks.time.Add(120 * time.Minute))
+		cert, _ := createSelfSignedCertificate(callbacks.time.Add(120 * time.Minute))
 		mock.InOrder(
 			callbacks.On("obtainCertificate").Return(cert, nil).Once(),
 			callbacks.On("installCertificate", cert).Return(nil).Once(),

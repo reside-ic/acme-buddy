@@ -49,7 +49,7 @@ jobs:
       - name: Install Go toolchain
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
 
       - name: Run integration tests
         run: go test -v ./e2e -image ${{ steps.build.outputs.imageid }}
