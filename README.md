@@ -74,7 +74,9 @@ server container starting up.
 The `--self-signed` flag is also provided for testing, which will cause acme-buddy
 to generate self-signed certificates instead of any attempt to contact
 LetsEncrypt, or to perform any DNS verficiation. Hence it is alternative to
-`--dns-provider` and they cannot both be specified.
+`--dns-provider` and they cannot both be specified. Setting the environment
+variable `ACME_BUDDY_SELF_SIGNED=1` has the same effect and again, can be
+passed into the container with `--env ACME_BUDDY_SELF_SIGNED`.
 
 ## DNS Providers
 
