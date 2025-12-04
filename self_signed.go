@@ -1,7 +1,8 @@
 package main
 
 import (
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
@@ -12,24 +13,26 @@ import (
 )
 
 // Create a self-signed certificate, using the given notAfter time
-func createSelfSignedCertificate(notAfter time.Time) (*certificate.Resource, error) {
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+func createSelfSignedCertificate(notAfter time.Time, domains []string) (*certificate.Resource, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, err
 	}
 
 	template := x509.Certificate{
-		NotAfter: notAfter,
-		KeyUsage: x509.KeyUsageDigitalSignature,
+		NotAfter:              notAfter,
+		NotBefore:             time.Now(),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:              domains,
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
 	if err != nil {
 		return nil, err
 	}
 
-	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, err
 	}
@@ -46,14 +49,14 @@ type SelfSignedClient struct {
 func (c *SelfSignedClient) ObtainCertificate(domains []string) (*certificate.Resource, error) {
 	log.Printf("Generating self-signed certificate for %v", domains)
 	notAfter := time.Now().Add(90 * 24 * time.Hour)
-	res, err := createSelfSignedCertificate(notAfter)
+	res, err := createSelfSignedCertificate(notAfter, domains)
 	if err != nil {
 		return nil, err
 	}
 	return &certificate.Resource{
-		Domain:       domains[0],
-		Certificate:  res.Certificate,
-		PrivateKey:   res.PrivateKey,
+		Domain:      domains[0],
+		Certificate: res.Certificate,
+		PrivateKey:  res.PrivateKey,
 	}, nil
 }
 
