@@ -3,7 +3,8 @@ package e2e
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -35,16 +36,16 @@ func createTestCertificate(template x509.Certificate) (*certificate.Resource, *x
 	template.KeyUsage = x509.KeyUsageDigitalSignature
 	template.BasicConstraintsValid = true
 	template.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, pub, priv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	keyBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+	keyBytes, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -94,7 +95,6 @@ type TestSuite struct {
 	// See https://github.com/letsencrypt/pebble/pull/65
 	pebbleMiniCA []byte
 }
-
 
 func (suite *TestSuite) SetupSuite() {
 	t := suite.T()
@@ -444,7 +444,7 @@ func (suite *TestSuite) runSelfSignedAcmeBuddy(domain string, opts ...tc.Contain
 
 	opts = append([]tc.ContainerCustomizer{
 		tc.WithLogConsumers(&tc.StdoutLogConsumer{}),
-		tc.WithWaitStrategy(WaitForSuccess()),		
+		tc.WithWaitStrategy(WaitForSuccess()),
 		network.WithNetwork([]string{}, suite.network),
 		tc.WithCmd(
 			"--self-signed",
@@ -467,7 +467,7 @@ func (suite *TestSuite) TestSelfSignedCertificateGeneration() {
 		t.Fatalf("failed to start AcmeBuddy in self-signed mode: %v", err)
 	}
 	defer container.Terminate(ctx)
-	
+
 	cert, err := readCertificateFromContainer(ctx, container)
 	require.NoError(t, err)
 
