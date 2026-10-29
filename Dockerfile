@@ -7,6 +7,7 @@ RUN go mod download
 
 COPY *.go ./
 COPY patches/ ./patches/
+COPY e2e/ ./e2e/
 
 RUN go mod vendor
 RUN sh patches/fix-docker-archive.sh
