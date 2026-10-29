@@ -54,7 +54,6 @@ jobs:
       - name: Vendor dependencies and apply compatibility patch
         run: |
           go mod vendor
-          sh patches/fix-docker-archive.sh
 
       - name: Run integration tests
         run: go test -mod=vendor -v ./e2e -image ${{ steps.build.outputs.imageid }}

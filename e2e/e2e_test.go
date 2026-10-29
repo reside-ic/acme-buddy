@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	imagepkg "github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/go-acme/lego/v4/certcrypto"
+        mobycli "github.com/moby/moby/client"
+	"github.com/moby/moby/client"
+        "github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,10 +116,11 @@ func (suite *TestSuite) SetupSuite() {
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() {
-			provider.Client().ImageRemove(context.Background(), image, imagepkg.RemoveOptions{
-				Force:         true,
-				PruneChildren: true,
-			})
+                    _, err := provider.Client().ImageRemove(context.Background(), image, mobycli.ImageRemoveOptions{
+                        Force:         true,
+                        PruneChildren: true,
+                    })
+                    require.NoError(t, err)
 		})
 		suite.image = image
 	}
@@ -363,11 +364,13 @@ func (suite *TestSuite) TestCanReloadContainer() {
 	client, err := tc.NewDockerClientWithOpts(ctx)
 	require.NoError(t, err)
 
-	volume, err := client.VolumeCreate(ctx, volume.CreateOptions{Labels: tc.GenericLabels()})
-	require.NoError(t, err)
+        volumeResult, err := client.VolumeCreate(ctx, mobycli.VolumeCreateOptions{
+            Labels: tc.GenericLabels(),
+        })
+        require.NoError(t, err)
 
 	mounts := tc.WithMounts(tc.ContainerMount{
-		Source: tc.DockerVolumeMountSource{Name: volume.Name},
+                Source: tc.DockerVolumeMountSource{Name: volumeResult.Volume.Name},
 		Target: "/tls",
 	})
 
@@ -433,7 +436,11 @@ func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	initialCert, err := readCertificateFromContainer(ctx, container)
 	require.NoError(t, err)
 
-	err = suite.provider.Client().ContainerKill(ctx, container.ID, "SIGHUP")
+	_, err = suite.provider.Client().ContainerKill(
+            ctx,
+            container.ID,
+            client.ContainerKillOptions{Signal: "SIGHUP"},
+        )
 	require.NoError(t, err)
 
 	err = wait.ForLog("certificate issued, next renewal in").WithOccurrence(2).WaitUntilReady(ctx, container)

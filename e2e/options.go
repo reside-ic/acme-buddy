@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
+        "github.com/moby/moby/api/types/container"
+        "github.com/moby/moby/api/types/mount"
 	"github.com/go-acme/lego/v4/certificate"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
