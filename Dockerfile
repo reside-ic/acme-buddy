@@ -6,6 +6,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY *.go ./
+COPY patches/ ./patches/
+
+RUN go mod vendor
+RUN sh patches/fix-docker-archive.sh
+
 RUN go build -o acme-buddy
 RUN go test -v
 
