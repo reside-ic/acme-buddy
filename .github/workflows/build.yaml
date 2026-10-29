@@ -57,7 +57,7 @@ jobs:
           sh patches/fix-docker-archive.sh
 
       - name: Run integration tests
-        run: go test -v ./e2e -image ${{ steps.build.outputs.imageid }}
+        run: go test -mod=vendor -v ./e2e -image ${{ steps.build.outputs.imageid }}
 
       - name: Push Docker image
         uses: docker/build-push-action@v6
