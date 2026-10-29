@@ -133,6 +133,9 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 	tc.CleanupContainer(t, container)
 
+        challTestSrvCert, err := copyFileFromContainer(ctx, container, "/certs/server.crt")
+        require.NoError(t, err)
+
 	container, err = startPebble(ctx, network)
 	require.NoError(t, err)
 	tc.CleanupContainer(t, container)
@@ -142,8 +145,11 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 	defer stream.Close()
 
-	suite.pebbleMiniCA, err = io.ReadAll(stream)
-	require.NoError(t, err)
+        suite.pebbleMiniCA, err = io.ReadAll(stream)
+        require.NoError(t, err)
+
+        suite.pebbleMiniCA = append(suite.pebbleMiniCA, '\n')
+        suite.pebbleMiniCA = append(suite.pebbleMiniCA, challTestSrvCert...)
 }
 
 func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
@@ -161,7 +167,7 @@ func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomiz
 			"--certificate-path=/tls/certificate.pem",
 			"--key-path=/tls/key.pem"),
 		tc.WithEnv(map[string]string{
-			"HDB_ACME_URL":      "http://challtestsrv:8080",
+			"HDB_ACME_URL":      "https://challtestsrv:8080",
 			"HDB_ACME_USERNAME": "foo",
 			"HDB_ACME_PASSWORD": "bar",
 			"SSL_CERT_FILE":     "/minica.pem",
