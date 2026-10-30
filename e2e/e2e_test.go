@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-        mobycli "github.com/moby/moby/client"
+    mobycli "github.com/moby/moby/client"
 	"github.com/moby/moby/client"
-        "github.com/go-acme/lego/v4/certcrypto"
+    "github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,11 +116,11 @@ func (suite *TestSuite) SetupSuite() {
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() {
-                    _, err := provider.Client().ImageRemove(context.Background(), image, mobycli.ImageRemoveOptions{
+            _, err := provider.Client().ImageRemove(context.Background(), image, mobycli.ImageRemoveOptions{
                         Force:         true,
                         PruneChildren: true,
-                    })
-                    require.NoError(t, err)
+            })
+            require.NoError(t, err)
 		})
 		suite.image = image
 	}
@@ -134,8 +134,8 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 	tc.CleanupContainer(t, container)
 
-        challTestSrvCert, err := copyFileFromContainer(ctx, container, "/certs/server.crt")
-        require.NoError(t, err)
+    challTestSrvCert, err := copyFileFromContainer(ctx, container, "/certs/server.crt")
+    require.NoError(t, err)
 
 	container, err = startPebble(ctx, network)
 	require.NoError(t, err)
@@ -146,11 +146,11 @@ func (suite *TestSuite) SetupSuite() {
 	require.NoError(t, err)
 	defer stream.Close()
 
-        suite.pebbleMiniCA, err = io.ReadAll(stream)
-        require.NoError(t, err)
+    suite.pebbleMiniCA, err = io.ReadAll(stream)
+    require.NoError(t, err)
 
-        suite.pebbleMiniCA = append(suite.pebbleMiniCA, '\n')
-        suite.pebbleMiniCA = append(suite.pebbleMiniCA, challTestSrvCert...)
+    suite.pebbleMiniCA = append(suite.pebbleMiniCA, '\n')
+    suite.pebbleMiniCA = append(suite.pebbleMiniCA, challTestSrvCert...)
 }
 
 func (suite *TestSuite) runAcmeBuddy(domain string, opts ...tc.ContainerCustomizer) (*tc.DockerContainer, error) {
@@ -364,13 +364,13 @@ func (suite *TestSuite) TestCanReloadContainer() {
 	client, err := tc.NewDockerClientWithOpts(ctx)
 	require.NoError(t, err)
 
-        volumeResult, err := client.VolumeCreate(ctx, mobycli.VolumeCreateOptions{
-            Labels: tc.GenericLabels(),
-        })
-        require.NoError(t, err)
+    volumeResult, err := client.VolumeCreate(ctx, mobycli.VolumeCreateOptions{
+        Labels: tc.GenericLabels(),
+    })
+    require.NoError(t, err)
 
 	mounts := tc.WithMounts(tc.ContainerMount{
-                Source: tc.DockerVolumeMountSource{Name: volumeResult.Volume.Name},
+        Source: tc.DockerVolumeMountSource{Name: volumeResult.Volume.Name},
 		Target: "/tls",
 	})
 
@@ -437,10 +437,10 @@ func (suite *TestSuite) TestCanForceRenewalWithSignal() {
 	require.NoError(t, err)
 
 	_, err = suite.provider.Client().ContainerKill(
-            ctx,
-            container.ID,
-            client.ContainerKillOptions{Signal: "SIGHUP"},
-        )
+        ctx,
+        container.ID,
+        client.ContainerKillOptions{Signal: "SIGHUP"},
+    )
 	require.NoError(t, err)
 
 	err = wait.ForLog("certificate issued, next renewal in").WithOccurrence(2).WaitUntilReady(ctx, container)
