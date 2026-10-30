@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
@@ -56,12 +56,17 @@ var reloadContainerFlag = flag.String("reload-container", "", "Name of container
 var reloadSignalFlag = flag.String("reload-signal", "SIGHUP", "Signal used to reload the container.")
 
 func reloadContainer(name, signal string) error {
-	client, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return err
-	}
+    cli, err := client.New(client.FromEnv)
+    if err != nil {
+        return err
+    }
 
-	return client.ContainerKill(context.Background(), name, signal)
+    _, err = cli.ContainerKill(
+        context.Background(),
+        name,
+        client.ContainerKillOptions{Signal: signal},
+    )
+    return err
 }
 
 func installCertificate(cert *certificate.Resource) error {

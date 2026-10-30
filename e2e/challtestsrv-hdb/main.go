@@ -58,5 +58,7 @@ func main() {
 			challSrv.DeleteDNSOneChallenge(fqdn)
 		}
 	})
-	router.Run()
+	if err := router.RunTLS(":8080", "/certs/server.crt", "/certs/server.key"); err != nil {
+            log.Fatalf("cannot start HTTPS server: %v", err)
+        }
 }
