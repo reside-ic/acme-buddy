@@ -8,7 +8,6 @@ RUN go mod download
 COPY *.go ./
 COPY e2e/ ./e2e/
 
-RUN go mod vendor
 RUN go build -o acme-buddy
 RUN go test -v
 
